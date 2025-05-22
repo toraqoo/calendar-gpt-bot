@@ -1,0 +1,8 @@
+fastapi
+python-telegram-bot
+openai
+google-api-python-client
+google-auth
+google-auth-oauthlib
+uvicorn
+python-dotenv
