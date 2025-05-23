@@ -20,6 +20,9 @@ def resolve_date_string(date_str):
         "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6
     }
 
+    if not date_str:
+        raise ValueError("날짜 문자열이 비어 있음")
+
     if date_str == "today":
         return today
     elif date_str == "tomorrow":
@@ -27,15 +30,17 @@ def resolve_date_string(date_str):
     elif date_str == "next_week_start":
         return today + datetime.timedelta(days=(7 - today.weekday()))
     elif date_str == "next_week_end":
-        return today + datetime.timedelta(days=(13 - today.weekday()))  # 다음주 일요일
+        return today + datetime.timedelta(days=(13 - today.weekday()))
     elif date_str.startswith("next_week_"):
         try:
             dow = date_str.replace("next_week_", "")
-            weekday = weekday_map[dow]
+            weekday = weekday_map.get(dow.lower())
+            if weekday is None:
+                raise ValueError(f"지원되지 않는 요일: {dow}")
             base = today + datetime.timedelta(days=(7 - today.weekday()))
             return base + datetime.timedelta(days=weekday)
         except Exception:
-            pass
+            raise ValueError(f"날짜 키워드 해석 실패: {date_str}")
     else:
         try:
             return datetime.date.fromisoformat(date_str)
@@ -49,11 +54,8 @@ def get_events_by_filter(parsed):
     time_filter = parsed.get("time_filter", None)
     keyword = parsed.get("keyword_filter")
 
-    try:
-        start_date = resolve_date_string(start)
-        end_date = resolve_date_string(end)
-    except Exception as e:
-        raise ValueError(f"날짜 해석 실패: {e}")
+    start_date = resolve_date_string(start)
+    end_date = resolve_date_string(end)
 
     start_dt = datetime.datetime.combine(start_date, datetime.time.min)
     end_dt = datetime.datetime.combine(end_date, datetime.time.max)
@@ -74,16 +76,19 @@ def get_events_by_filter(parsed):
     # 시간 필터링
     if time_filter:
         def in_range(event):
-            dt = event['start'].get('dateTime')
-            if not dt:
+            dt_raw = event['start'].get('dateTime')
+            if not dt_raw:
                 return False
-            hour = int(dt[11:13])
-            if time_filter == "evening":
-                return 18 <= hour <= 22
-            elif time_filter == "morning":
+            dt = datetime.datetime.fromisoformat(dt_raw.replace('Z', '+00:00'))
+            hour = dt.hour
+            if time_filter == "morning":
                 return 6 <= hour < 12
             elif time_filter == "afternoon":
                 return 12 <= hour < 18
+            elif time_filter == "evening":
+                return 18 <= hour <= 23
+            elif time_filter == "lunch":
+                return 11 <= hour < 14
             return True
         events = list(filter(in_range, events))
 
@@ -96,13 +101,22 @@ def get_events_by_filter(parsed):
 def format_event_list(events):
     result = []
     for e in events:
-        start_dt = e['start'].get('dateTime', e['start'].get('date'))
+        start_raw = e['start'].get('dateTime', e['start'].get('date'))
+        end_raw = e['end'].get('dateTime', e['end'].get('date'))
+
         try:
-            dt = datetime.datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
-            date_str = dt.strftime("%Y-%m-%d (%a) %H:%M")
+            start_dt = datetime.datetime.fromisoformat(start_raw.replace('Z', '+00:00'))
+            end_dt = datetime.datetime.fromisoformat(end_raw.replace('Z', '+00:00'))
+            duration = end_dt - start_dt
+            duration_hours = round(duration.total_seconds() / 3600, 1)
+
+            date_str = start_dt.strftime("%y/%m/%d(%a) %H:%M")
+            end_str = end_dt.strftime("%H:%M")
+            display = f"{date_str}~{end_str} ({duration_hours}h) - {e.get('summary', '제목 없음')}"
         except:
-            date_str = start_dt
-        result.append(f"🗓 {date_str} - {e.get('summary', '제목 없음')}")
+            display = f"{start_raw} - {e.get('summary', '제목 없음')}"
+
+        result.append(f"🗓 {display}")
     return "\n".join(result)
 
 def get_today_events():
