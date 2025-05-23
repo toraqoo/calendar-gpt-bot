@@ -65,7 +65,7 @@ def summarize_events_compact(dates, events):
 
     for d in dates:
         if not by_date[d]:
-            continue  # ❗ 일정 없는 날짜는 출력 안함
+            continue
         date_obj = datetime.date.fromisoformat(d)
         dow = weekday_ko[date_obj.weekday()]
         header = f"📅 {d[5:]}({dow})"
@@ -77,7 +77,8 @@ def summarize_events_compact(dates, events):
             try:
                 start_dt = datetime.datetime.fromisoformat(start.replace("Z", "+00:00"))
                 end_dt = datetime.datetime.fromisoformat(end.replace("Z", "+00:00"))
-                duration = round((end_dt - start_dt).total_seconds() / 3600, 1)
+                duration_raw = (end_dt - start_dt).total_seconds() / 3600
+                duration = int(duration_raw) if duration_raw.is_integer() else round(duration_raw, 1)
                 rows.append(f"- {start_dt.strftime('%H:%M')}~{end_dt.strftime('%H:%M')} ({duration}h): {summary}")
             except:
                 rows.append(f"- {summary}")
