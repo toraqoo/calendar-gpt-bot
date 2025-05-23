@@ -3,7 +3,8 @@ import os
 import httpx
 import datetime
 from openai import OpenAI
-from gcal import get_today_events, get_tomorrow_events, get_nextweek_evening_free_days
+from gcal import get_today_events, get_events_by_filter
+import json
 
 app = FastAPI()
 
@@ -13,7 +14,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.get("/")
 def root():
-    return {"message": "Mk 일정 비서 최신 버전 동작 중 ✅"}
+    return {"message": "Mk 일정 비서 GPT-Intent 버전 ✅"}
 
 @app.post("/webhook")
 async def telegram_webhook(req: Request):
@@ -24,63 +25,60 @@ async def telegram_webhook(req: Request):
     if not chat_id or not user_text:
         return {"ok": False}
 
-    # 명령 분석
-    user_text_lower = user_text.lower()
-
     if user_text.startswith("/start"):
-        await send(chat_id, "Mk님의 일정 비서에 오신 걸 환영합니다! 아래처럼 말해보세요:\n\n- 오늘 일정\n- 내일 약속 있어?\n- 다음주에 저녁 시간 되는 날은?")
+        await send(chat_id, "Mk님의 일정 비서입니다!\n말로 물어보세요:\n예: 다음주 일정 보여줘, 5월 27일 일정 알려줘, 골프 약속 몇개 있어")
         return {"ok": True}
 
-    if "오늘" in user_text and "일정" in user_text:
-        events = get_today_events()
-        if not events:
-            await send(chat_id, "📅 오늘은 일정이 없습니다.")
-        else:
-            msg = "📅 오늘 일정:\n" + "\n".join(
-                f"• {e['start'].get('dateTime', e['start'].get('date'))} - {e.get('summary', '제목 없음')}"
-                for e in events
-            )
-            await send(chat_id, msg)
+    # 1단계: GPT에게 intent JSON 요청
+    try:
+        parsed = await ask_gpt_intent(user_text)
+    except Exception as e:
+        await send(chat_id, f"[GPT Intent 분석 오류] {str(e)}")
         return {"ok": True}
 
-    if "내일" in user_text:
-        events = get_tomorrow_events()
-        if not events:
-            await send(chat_id, "📅 내일은 일정이 없습니다.")
-        else:
-            msg = "📅 내일 일정:\n" + "\n".join(
-                f"• {e['start'].get('dateTime', e['start'].get('date'))} - {e.get('summary', '제목 없음')}"
-                for e in events
-            )
-            await send(chat_id, msg)
-        return {"ok": True}
+    if parsed.get("action") == "get_schedule":
+        try:
+            events = get_events_by_filter(parsed)
+            if not events:
+                await send(chat_id, "📅 해당 조건에 맞는 일정이 없습니다.")
+            else:
+                msg = "📅 일정:\n" + "\n".join([
+                    f"• {e['start'].get('dateTime', e['start'].get('date'))} - {e.get('summary', '제목 없음')}"
+                    for e in events
+                ])
+                await send(chat_id, msg)
+        except Exception as e:
+            await send(chat_id, f"[일정 불러오기 오류] {str(e)}")
+    else:
+        await send(chat_id, f"❓ '{parsed.get('action')}' 요청은 아직 구현되지 않았습니다.")
 
-    if "다음주" in user_text and ("비는 날" in user_text or "약속 없는" in user_text or "저녁" in user_text):
-        free_days = get_nextweek_evening_free_days()
-        if free_days:
-            await send(chat_id, "🍽 다음주 저녁 약속 없는 날:\n" + "\n".join(free_days))
-        else:
-            await send(chat_id, "❗ 다음주엔 매일 저녁 약속이 있습니다.")
-        return {"ok": True}
-
-    # GPT fallback
-    gpt_response = await ask_gpt(user_text)
-    await send(chat_id, gpt_response)
     return {"ok": True}
 
 async def send(chat_id, text):
     async with httpx.AsyncClient() as client:
         await client.post(f"{API_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
 
-async def ask_gpt(text):
-    try:
-        res = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "너는 텔레그램 일정 비서야. 구글 캘린더와 연결돼있고, 일정 조회와 설명을 자연스럽게 해줘."},
-                {"role": "user", "content": text}
-            ]
-        )
-        return res.choices[0].message.content.strip()
-    except Exception as e:
-        return f"[GPT 오류] {e}"
+async def ask_gpt_intent(text):
+    system_prompt = (
+        "너는 일정 비서야. 사용자의 자연어 요청을 보고 JSON 형식으로 intent를 추출해야 해.\n"
+        "아래와 같은 형식으로 응답해줘:\n\n"
+        "{\n"
+        "  \"action\": \"get_schedule\",\n"
+        "  \"date_range\": {\n"
+        "    \"start\": \"2025-05-27\",\n"
+        "    \"end\": \"2025-05-31\"\n"
+        "  },\n"
+        "  \"time_filter\": \"evening\", \n"
+        "  \"keyword_filter\": \"골프\"\n"
+        "}"
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": text}
+        ]
+    )
+    content = response.choices[0].message.content
+    return json.loads(content)
