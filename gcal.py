@@ -15,18 +15,28 @@ def get_calendar_service():
 
 def resolve_date_string(date_str):
     today = datetime.date.today()
+    weekday_map = {
+        "monday": 0, "tuesday": 1, "wednesday": 2,
+        "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6
+    }
+
     if date_str == "today":
         return today
     elif date_str == "tomorrow":
         return today + datetime.timedelta(days=1)
     elif date_str == "next_week_start":
-        return today + datetime.timedelta(days=(7 - today.weekday()))  # 다음주 월요일
-    elif date_str.startswith("next_week_day_"):  # next_week_day_0~6 (월~일)
-        weekday = int(date_str.split("_")[-1])
-        base = today + datetime.timedelta(days=(7 - today.weekday()))
-        return base + datetime.timedelta(days=weekday)
+        return today + datetime.timedelta(days=(7 - today.weekday()))
+    elif date_str == "next_week_end":
+        return today + datetime.timedelta(days=(13 - today.weekday()))  # 다음주 일요일
+    elif date_str.startswith("next_week_"):
+        try:
+            dow = date_str.replace("next_week_", "")
+            weekday = weekday_map[dow]
+            base = today + datetime.timedelta(days=(7 - today.weekday()))
+            return base + datetime.timedelta(days=weekday)
+        except Exception:
+            pass
     else:
-        # try to parse ISO format
         try:
             return datetime.date.fromisoformat(date_str)
         except:
@@ -104,4 +114,3 @@ def get_today_events():
             "end": today.isoformat()
         }
     })
-
