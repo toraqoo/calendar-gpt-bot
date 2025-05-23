@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 import os
 import httpx
 import openai
+from gcal import get_today_events
 
 app = FastAPI()
 
@@ -25,10 +26,23 @@ async def telegram_webhook(req: Request):
         return {"ok": False}
 
     if user_text.startswith("/start"):
-        await send_message(chat_id, "Mk님의 일정 비서에 오신 걸 환영합니다!\n자연어로 물어보세요:\n- 내일 약속 있어?\n- 다음주 회식 잡아줘")
+        await send_message(chat_id, "Mk님의 일정 비서에 오신 걸 환영합니다!\n자연어로 물어보세요:\n- 오늘 일정 뭐 있어?\n- 다음주 수요일에 회식 잡아줘")
         return {"ok": True}
 
-    # GPT 응답 호출
+    # ✅ 1. 특정 키워드 매칭 → 오늘 일정 조회
+    if "오늘" in user_text and "일정" in user_text:
+        events = get_today_events()
+        if not events:
+            reply = "📅 오늘은 등록된 일정이 없습니다."
+        else:
+            reply = "📅 오늘 일정:\n" + "\n".join([
+                f"🕒 {e['start'].get('dateTime', e['start'].get('date'))} - {e.get('summary', '제목 없음')}"
+                for e in events
+            ])
+        await send_message(chat_id, reply)
+        return {"ok": True}
+
+    # ✅ 2. 그 외는 GPT로 전달
     gpt_reply = await ask_gpt(user_text)
     await send_message(chat_id, gpt_reply)
     return {"ok": True}
@@ -45,7 +59,7 @@ async def ask_gpt(user_text):
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "너는 텔레그램 일정 비서야. 사용자의 자연어 일정 요청에 대해 부드럽고 간결하게 응답해줘. 실제 캘린더 연동은 아직 없어. 예시를 들어줘."},
+                {"role": "system", "content": "너는 텔레그램 일정 비서야. 구글 캘린더에서 일정을 직접 조회하거나 등록할 수 있어. 사용자의 일상적인 질문에 자연스럽게 답해줘."},
                 {"role": "user", "content": user_text}
             ],
             temperature=0.6
