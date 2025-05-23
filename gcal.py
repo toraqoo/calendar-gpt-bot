@@ -3,7 +3,6 @@ from googleapiclient.discovery import build
 import os
 import datetime
 
-
 def get_calendar_service():
     creds = Credentials(
         None,
@@ -13,7 +12,6 @@ def get_calendar_service():
         client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
     )
     return build("calendar", "v3", credentials=creds)
-
 
 def get_events_for_dates(dates):
     service = get_calendar_service()
@@ -32,10 +30,9 @@ def get_events_for_dates(dates):
         ).execute()
         items = events_result.get('items', [])
         for e in items:
-            e['__date'] = date_str  # 일정의 기준 날짜 기록
+            e['__date'] = date_str
         all_events.extend(items)
     return all_events
-
 
 def summarize_events_compact(dates, events):
     weekday_ko = ["월", "화", "수", "목", "금", "토", "일"]
@@ -48,6 +45,8 @@ def summarize_events_compact(dates, events):
         by_date[e['__date']].append(e)
 
     for d in dates:
+        if not by_date[d]:
+            continue  # ❗ 일정 없는 날짜는 출력 안함
         date_obj = datetime.date.fromisoformat(d)
         dow = weekday_ko[date_obj.weekday()]
         header = f"📅 {d[5:]}({dow})"
