@@ -14,7 +14,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.get("/")
 def root():
-    return {"message": "Mk 일정 비서 v4 - GPT가 질문 해석부터 응답까지 처리"}
+    return {"message": "Mk 일정 비서 v5 - 자연어 → intent → 일정 → 자연어 응답"}
 
 @app.post("/webhook")
 async def telegram_webhook(req: Request):
@@ -26,19 +26,20 @@ async def telegram_webhook(req: Request):
         return {"ok": False}
 
     if user_text.startswith("/start"):
-        await send(chat_id, "Mk 일정 비서입니다! 자연스럽게 물어보세요.\n\n예: 다음주 수요일에 회의 있어?\n6월 전체 일정 알려줘\n다다음주 월요일 저녁 일정 뭐 있어?")
+        await send(chat_id, "Mk 일정 비서입니다. 자연스럽게 물어보세요!\n\n예시:\n- 다음주 월 일정은?\n- 담주 화요일 점심 약속?\n- 6월 전체 일정은?")
         return {"ok": True}
 
     try:
-        # 1. GPT에게 질문 해석 요청
+        # 1. GPT에게 intent 추출 요청
         intent = await ask_gpt_intent(user_text)
 
-        # 2. intent 기반으로 일정 조회
+        # 2. intent 기반으로 일정 검색
         events = get_events_by_filter(intent)
 
-        # 3. 일정 데이터를 기반으로 GPT에게 요약 요청
+        # 3. 일정 결과를 GPT로 요약
         response = await summarize_events_with_gpt(user_text, events)
         await send(chat_id, response)
+
     except Exception as e:
         await send(chat_id, f"[오류] {str(e)}")
     return {"ok": True}
@@ -49,16 +50,19 @@ async def send(chat_id, text):
 
 async def ask_gpt_intent(question):
     system_prompt = (
-        "너는 일정 비서야. 사용자의 자연어 질문을 보고 반드시 정확한 intent JSON으로 반환해야 해.\n"
-        "모든 날짜는 반드시 yyyy-mm-dd 형식으로 변환해. '다음주 화요일', '5/27(화)', '6월 전체' 등의 표현도 계산해서 명확한 날짜 범위로 바꿔줘야 해.\n\n"
-        "반환 예시:\n"
+        "너는 일정 비서야. 사용자의 자연어 요청을 보고 다음 형식의 JSON으로 intent를 정확하게 추출해야 해.\n"
+        "❗❗ 주의: '다음주 월요일', '5/27(화)', '6월 전체' 같은 표현도 너(GPT)가 직접 계산해서 yyyy-mm-dd 형식으로 변환해.\n"
+        "❌ 'next_monday', '다음주 수요일' 같은 말은 서버가 이해 못해.\n"
+        "반드시 정확한 날짜를 계산해서 반환해.\n\n"
+        "예시:\n"
         "{\n"
         "  \"action\": \"get_schedule\",\n"
-        "  \"date_range\": {\"start\": \"2025-05-27\", \"end\": \"2025-05-27\"},\n"
+        "  \"date_range\": {\"start\": \"2025-05-26\", \"end\": \"2025-05-26\"},\n"
         "  \"time_filter\": \"evening\",  // optional\n"
-        "  \"keyword_filter\": \"회의\"    // optional\n"
+        "  \"keyword_filter\": \"회의\"      // optional\n"
         "}"
     )
+
     response = client.chat.completions.create(
         model="gpt-4",
         messages=[
@@ -93,12 +97,12 @@ async def summarize_events_with_gpt(question, events):
             blocks.append(f"- {summary}")
 
     date_str = start_dt.strftime("%m/%d") + f"({dow})"
-    prompt = f"사용자가 '{question}'라고 물었고, {date_str} 일정은 다음과 같아:\n" + "\n".join(blocks) + "\n간결하게 정리해서 말해줘."
+    prompt = f"사용자가 '{question}'라고 물었고, {date_str} 일정은 다음과 같아:\n" + "\n".join(blocks) + "\n친절하지만 간결하게 정리해서 대답해줘."
 
     response = client.chat.completions.create(
         model="gpt-4",
         messages=[
-            {"role": "system", "content": "너는 일정 비서야. 사용자 질문에 대한 일정을 예쁘고 간단하게 정리해줘."},
+            {"role": "system", "content": "너는 일정 비서야. 데이터를 간결하게 정리해서 답변해줘."},
             {"role": "user", "content": prompt}
         ]
     )
