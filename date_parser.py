@@ -3,19 +3,29 @@ import re
 
 weekday_ko = {"월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6}
 
+
 def get_date_for_weekday(offset_weeks, weekday):
     today = datetime.date.today()
     base = today + datetime.timedelta(days=(7 * offset_weeks - today.weekday()))
     return base + datetime.timedelta(days=weekday)
+
 
 def expand_range(start_wd, end_wd):
     start = weekday_ko[start_wd]
     end = weekday_ko[end_wd]
     return [d for d in range(start, end + 1)] if start <= end else []
 
+
 def extract_dates_from_text(text):
     today = datetime.date.today()
     dates = set()
+    time_filter = None
+
+    # 0. time filter 감지
+    if "저녁" in text:
+        time_filter = "evening"
+    elif "점심" in text:
+        time_filter = "lunch"
 
     # 1. 5/26 형식
     md_pattern = re.findall(r"\b(\d{1,2})/(\d{1,2})\b", text)
@@ -41,6 +51,11 @@ def extract_dates_from_text(text):
                     if p in weekday_ko:
                         dates.add(get_date_for_weekday(offset, weekday_ko[p]))
 
+            # 만약 요일이 하나도 없으면 → prefix 단독 사용 → 다음주 전체로 간주
+            if not re.search(r"[월화수목금토일]", after):
+                for i in range(7):
+                    dates.add(get_date_for_weekday(offset, i))
+
     # 3. 복수 날짜 쉼표 구분: 5/26, 5/27, 5/28
     if "," in text:
         md_multi = re.findall(r"(\d{1,2})/(\d{1,2})", text)
@@ -51,4 +66,4 @@ def extract_dates_from_text(text):
             except:
                 continue
 
-    return sorted([d.isoformat() for d in dates])
+    return sorted([d.isoformat() for d in dates]), time_filter
