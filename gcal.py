@@ -94,3 +94,14 @@ def format_event_list(events):
             date_str = start_dt
         result.append(f"🗓 {date_str} - {e.get('summary', '제목 없음')}")
     return "\n".join(result)
+
+def get_today_events():
+    today = datetime.date.today()
+    return get_events_by_filter({
+        "action": "get_schedule",
+        "date_range": {
+            "start": today.isoformat(),
+            "end": today.isoformat()
+        }
+    })
+
