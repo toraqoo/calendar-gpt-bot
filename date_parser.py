@@ -1,5 +1,6 @@
 import datetime
 import re
+import calendar
 
 weekday_ko = {"월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6}
 
@@ -21,20 +22,23 @@ def extract_dates_from_text(text):
     dates = set()
     time_filter = None
 
-    # 0. time filter 감지
+    # 0. 시간 필터 감지
     if "저녁" in text:
         time_filter = "evening"
     elif "점심" in text:
         time_filter = "lunch"
 
-    # 표현 매핑 정의
-    prefix_map = {
-        "다다음주": 2, "다담주": 2, "2주뒤": 2, "2주 뒤": 2, "2주후": 2, "2주 후": 2,
-        "다음주": 1, "담주": 1, "1주뒤": 1, "1주 뒤": 1, "1주후": 1, "1주 후": 1,
-        "이번주": 0, "0주뒤": 0, "0주 뒤": 0
-    }
+    # 1. 월 전체 일정 - 예: 6월 전체, 5월 전체 일정은?, 5월 저녁 일정
+    m = re.search(r"(\d{1,2})월", text)
+    if m:
+        month = int(m.group(1))
+        if "전체" in text or "일정" in text or "저녁" in text or "점심" in text:
+            year = today.year
+            last_day = calendar.monthrange(year, month)[1]
+            for day in range(1, last_day + 1):
+                dates.add(datetime.date(year, month, day))
 
-    # 1. 5/26 형식
+    # 2. 5/26 형식
     md_pattern = re.findall(r"\b(\d{1,2})/(\d{1,2})\b", text)
     for month, day in md_pattern:
         try:
@@ -43,7 +47,12 @@ def extract_dates_from_text(text):
         except:
             continue
 
-    # 2. 주차 단어 + 요일들 (붙은/쉼표형/범위형 모두)
+    # 3. 담주/다다음주/이번주 등 요일 묶음
+    prefix_map = {
+        "다다음주": 2, "다담주": 2, "2주뒤": 2, "2주 뒤": 2, "2주후": 2, "2주 후": 2,
+        "다음주": 1, "담주": 1, "1주뒤": 1, "1주 뒤": 1, "1주후": 1, "1주 후": 1,
+        "이번주": 0, "0주뒤": 0, "0주 뒤": 0
+    }
     for prefix, offset in prefix_map.items():
         if prefix in text:
             after = text.split(prefix)[-1]
@@ -61,7 +70,7 @@ def extract_dates_from_text(text):
                 for i in range(7):
                     dates.add(get_date_for_weekday(offset, i))
 
-    # 3. 복수 날짜 쉼표 구분: 5/26, 5/27, 5/28
+    # 4. 복수 날짜 쉼표 구분: 5/26, 5/27, 5/28
     if "," in text:
         md_multi = re.findall(r"(\d{1,2})/(\d{1,2})", text)
         for month, day in md_multi:
