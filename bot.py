@@ -33,9 +33,16 @@ async def ask_gpt(user_text):
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "너는 사용자의 일정 요청을 받아서 자연스럽게 응답해주는 일정 비서야. 구글 캘린더 연동은 아직 안 되어 있으니, 예시로 일정처럼 말해줘."},
-                {"role": "user", "content": user_text}
-            ]
+                {
+                    "role": "system",
+                    "content": "너는 텔레그램 봇 기반 일정 비서야. 사용자의 질문을 듣고 자연스럽게 일정 관련 답변을 해줘. 실제 구글 캘린더에 연결된 건 아니고, 예시처럼 설명해줘."
+                },
+                {
+                    "role": "user",
+                    "content": user_text
+                }
+            ],
+            temperature=0.7
         )
         return response.choices[0].message["content"]
     except Exception as e:
