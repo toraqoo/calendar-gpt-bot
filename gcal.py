@@ -2,6 +2,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 import os
 import datetime
+import re
 
 def get_calendar_service():
     creds = Credentials(
@@ -16,6 +17,7 @@ def get_calendar_service():
 def resolve_date_string(date_str):
     today = datetime.date.today()
     weekday_map = {
+        "월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6,
         "monday": 0, "tuesday": 1, "wednesday": 2,
         "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6
     }
@@ -23,29 +25,45 @@ def resolve_date_string(date_str):
     if not date_str:
         raise ValueError("날짜 문자열이 비어 있음")
 
+    # ✅ '5/26(월)' → '2025-05-26'
+    try:
+        date_str = re.sub(r"[\(\)\s]", "", date_str)  # remove (월)
+        if re.match(r"\d{1,2}/\d{1,2}", date_str):
+            month, day = map(int, date_str.split("/"))
+            this_year = today.year
+            date_obj = datetime.date(this_year, month, day)
+            return date_obj
+    except:
+        pass
+
+    # ✅ '다음주 월' or 'next_week_monday'
+    if date_str.startswith("next_week_"):
+        dow = date_str.replace("next_week_", "").lower()
+        base = today + datetime.timedelta(days=(7 - today.weekday()))
+        if dow in weekday_map:
+            return base + datetime.timedelta(days=weekday_map[dow])
+
+    if date_str.startswith("다음주"):
+        dow = date_str.replace("다음주", "").strip()
+        base = today + datetime.timedelta(days=(7 - today.weekday()))
+        if dow in weekday_map:
+            return base + datetime.timedelta(days=weekday_map[dow])
+
+    if date_str.startswith("다다음주"):
+        dow = date_str.replace("다다음주", "").strip()
+        base = today + datetime.timedelta(days=(14 - today.weekday()))
+        if dow in weekday_map:
+            return base + datetime.timedelta(days=weekday_map[dow])
+
     if date_str == "today":
         return today
     elif date_str == "tomorrow":
         return today + datetime.timedelta(days=1)
-    elif date_str == "next_week_start":
-        return today + datetime.timedelta(days=(7 - today.weekday()))
-    elif date_str == "next_week_end":
-        return today + datetime.timedelta(days=(13 - today.weekday()))
-    elif date_str.startswith("next_week_"):
-        try:
-            dow = date_str.replace("next_week_", "")
-            weekday = weekday_map.get(dow.lower())
-            if weekday is None:
-                raise ValueError(f"지원되지 않는 요일: {dow}")
-            base = today + datetime.timedelta(days=(7 - today.weekday()))
-            return base + datetime.timedelta(days=weekday)
-        except Exception:
-            raise ValueError(f"날짜 키워드 해석 실패: {date_str}")
-    else:
-        try:
-            return datetime.date.fromisoformat(date_str)
-        except:
-            raise ValueError(f"날짜 '{date_str}'를 해석할 수 없습니다.")
+
+    try:
+        return datetime.date.fromisoformat(date_str)
+    except:
+        raise ValueError(f"날짜 '{date_str}'를 해석할 수 없습니다.")
 
 def get_events_by_filter(parsed):
     service = get_calendar_service()
