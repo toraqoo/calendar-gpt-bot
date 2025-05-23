@@ -5,6 +5,7 @@ import datetime
 from openai import OpenAI
 from gcal import get_events_by_filter
 import json
+import re
 
 app = FastAPI()
 
@@ -14,7 +15,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.get("/")
 def root():
-    return {"message": "Mk 일정 비서 v8 - GPT 강화 + fallback 확정"}
+    return {"message": "Mk 일정 비서 v9 - GPT 해석 실패 보완"}
 
 @app.post("/webhook")
 async def telegram_webhook(req: Request):
@@ -26,11 +27,17 @@ async def telegram_webhook(req: Request):
         return {"ok": False}
 
     if user_text.startswith("/start"):
-        await send(chat_id, "Mk 일정 비서입니다! 아래처럼 질문해보세요:\n\n- 담주 월요일 일정은?\n- 5/26~5/29 일정 보여줘\n- 6월 저녁 약속 주차별로 정리해줘")
+        await send(chat_id, "Mk 일정 비서입니다. 자연어로 일정 질문을 해보세요. 예: \n- 5/27 일정은?\n- 다음주 수요일에 뭐 있어?\n- 6월 골프 약속은?")
         return {"ok": True}
 
     try:
         intent = await ask_gpt_intent(user_text)
+        start = intent.get("date_range", {}).get("start")
+        end = intent.get("date_range", {}).get("end")
+
+        if not start or not re.match(r"\\d{4}-\\d{2}-\\d{2}", start):
+            raise ValueError("GPT가 반환한 날짜가 유효하지 않습니다.")
+
         events = get_events_by_filter(intent)
 
         if intent.get("weekly_summary"):
@@ -41,7 +48,21 @@ async def telegram_webhook(req: Request):
         await send(chat_id, response)
 
     except Exception as e:
-        await send(chat_id, f"[오류] {str(e)}")
+        today = datetime.date.today().isoformat()
+        fallback_intent = {
+            "action": "get_schedule",
+            "date_range": {"start": today, "end": today},
+            "time_filter": None,
+            "keyword_filter": None,
+            "weekly_summary": False
+        }
+        try:
+            events = get_events_by_filter(fallback_intent)
+            fallback_response = await summarize_events_with_gpt("오늘 일정", events)
+            await send(chat_id, fallback_response)
+        except:
+            await send(chat_id, f"[오류] {str(e)}")
+
     return {"ok": True}
 
 async def send(chat_id, text):
@@ -49,53 +70,25 @@ async def send(chat_id, text):
         await client.post(f"{API_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
 
 async def ask_gpt_intent(question):
-    base_prompt = (
-        "너는 일정 비서야. 사용자의 자연어 질문을 다음 JSON 형식으로 분석해야 해:\n\n"
-        "{\n"
-        "  \"action\": \"get_schedule\",\n"
-        "  \"date_range\": {\"start\": \"yyyy-mm-dd\", \"end\": \"yyyy-mm-dd\"},\n"
-        "  \"time_filter\": \"morning|afternoon|evening|lunch\",\n"
-        "  \"keyword_filter\": \"골프\",\n"
-        "  \"weekly_summary\": true|false\n"
-        "}\n\n"
-        "❗ 반드시 모든 날짜 표현은 ISO yyyy-mm-dd 형식으로 변환해서 반환해.\n"
-        "❗ '다음주 월', '5/26(월)', '6월 전체' 등의 표현도 너가 직접 계산해서 날짜로 넣어야 해.\n"
-        "❗ 쉼표로 여러 날짜가 있을 경우 → 최소~최대 날짜 범위로 묶어서 반환해."
+    prompt = (
+        "너는 일정 비서야. 사용자의 자연어 요청을 보고 다음 JSON 형식으로 intent를 반환해:",
+        "\n{",
+        "\"action\": \"get_schedule\",",
+        "\"date_range\": {\"start\": \"yyyy-mm-dd\", \"end\": \"yyyy-mm-dd\"},",
+        "\"time_filter\": \"lunch\",",
+        "\"keyword_filter\": \"골프\",",
+        "\"weekly_summary\": true",
+        "}",
+        "❗ 반드시 날짜 표현은 ISO 포맷으로 변환해야 해. 예: '다음주 월요일' → '2025-06-03'"
     )
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": base_prompt},
-                {"role": "user", "content": question}
-            ]
-        )
-        content = response.choices[0].message.content.strip()
-        return json.loads(content)
-    except:
-        # 재질문
-        try:
-            retry = f"이전 질문에 대해 JSON intent를 제대로 못 만들었어. 아래 질문을 보고 JSON intent로 다시 반환해:\n'{question}'"
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": base_prompt},
-                    {"role": "user", "content": retry}
-                ]
-            )
-            content = response.choices[0].message.content.strip()
-            return json.loads(content)
-        except:
-            # fallback
-            today = datetime.date.today().isoformat()
-            return {
-                "action": "get_schedule",
-                "date_range": {"start": today, "end": today},
-                "time_filter": None,
-                "keyword_filter": None,
-                "weekly_summary": False
-            }
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "\n".join(prompt)},
+            {"role": "user", "content": question}
+        ]
+    )
+    return json.loads(response.choices[0].message.content.strip())
 
 async def summarize_events_with_gpt(question, events):
     if not events:
@@ -115,16 +108,12 @@ async def summarize_events_with_gpt(question, events):
         except:
             blocks.append(f"- {summary}")
 
-    prompt = (
-        f"사용자 질문: {question}\n\n"
-        "일정:\n" + "\n".join(blocks) +
-        "\n위 내용을 한글로 간결하고 자연스럽게 정리해서 알려줘. 날짜 요일은 그대로 유지해."
-    )
+    prompt = f"사용자 질문: {question}\n일정:\n" + "\n".join(blocks) + "\n정리해서 간단히 말해줘."
 
     response = client.chat.completions.create(
         model="gpt-4",
         messages=[
-            {"role": "system", "content": "너는 일정 비서야. 데이터를 깔끔하게 정리해서 자연스럽게 대답해줘."},
+            {"role": "system", "content": "일정을 간결하게 요약해서 말해줘."},
             {"role": "user", "content": prompt}
         ]
     )
