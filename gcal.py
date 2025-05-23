@@ -13,83 +13,42 @@ def get_calendar_service():
     )
     return build("calendar", "v3", credentials=creds)
 
-def get_today_events():
-    service = get_calendar_service()
-    now = datetime.datetime.utcnow()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat() + 'Z'
-    today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999).isoformat() + 'Z'
-    
-    events_result = service.events().list(
-        calendarId='primary',
-        timeMin=today_start,
-        timeMax=today_end,
-        maxResults=10,
-        singleEvents=True,
-        orderBy='startTime'
-    ).execute()
-    
-    events = events_result.get('items', [])
-    return events
-
-def get_tomorrow_events():
-    service = get_calendar_service()
-    tomorrow = datetime.datetime.utcnow() + datetime.timedelta(days=1)
-    start = tomorrow.replace(hour=0, minute=0, second=0).isoformat() + 'Z'
-    end = tomorrow.replace(hour=23, minute=59, second=59).isoformat() + 'Z'
-    
-    events_result = service.events().list(
-        calendarId='primary',
-        timeMin=start,
-        timeMax=end,
-        maxResults=10,
-        singleEvents=True,
-        orderBy='startTime'
-    ).execute()
-    
-    events = events_result.get('items', [])
-    return events
-
-def get_nextweek_evening_free_days():
-    service = get_calendar_service()
+def resolve_date_string(date_str):
     today = datetime.date.today()
-    start = today + datetime.timedelta(days=(7 - today.weekday()))  # 다음주 월요일
-    evening_free = []
-
-    for i in range(7):  # 월~일
-        day = start + datetime.timedelta(days=i)
-        t_start = datetime.datetime.combine(day, datetime.time(18, 0)).isoformat() + 'Z'
-        t_end = datetime.datetime.combine(day, datetime.time(23, 0)).isoformat() + 'Z'
-        events = service.events().list(
-            calendarId='primary',
-            timeMin=t_start,
-            timeMax=t_end,
-            maxResults=10,
-            singleEvents=True,
-            orderBy='startTime'
-        ).execute().get('items', [])
-        
-        if not events:
-            evening_free.append(day.strftime("%Y-%m-%d (%a)"))
-
-    return evening_free
+    if date_str == "today":
+        return today
+    elif date_str == "tomorrow":
+        return today + datetime.timedelta(days=1)
+    elif date_str == "next_week_start":
+        return today + datetime.timedelta(days=(7 - today.weekday()))  # 다음주 월요일
+    elif date_str.startswith("next_week_day_"):  # next_week_day_0~6 (월~일)
+        weekday = int(date_str.split("_")[-1])
+        base = today + datetime.timedelta(days=(7 - today.weekday()))
+        return base + datetime.timedelta(days=weekday)
+    else:
+        # try to parse ISO format
+        try:
+            return datetime.date.fromisoformat(date_str)
+        except:
+            raise ValueError(f"날짜 '{date_str}'를 해석할 수 없습니다.")
 
 def get_events_by_filter(parsed):
     service = get_calendar_service()
     start = parsed.get("date_range", {}).get("start")
     end = parsed.get("date_range", {}).get("end")
     time_filter = parsed.get("time_filter", None)
-    keyword = parsed.get("keyword_filter", "").lower()
+    keyword = parsed.get("keyword_filter")
 
-    if not start or not end:
-        raise ValueError("start/end 날짜가 누락됐습니다.")
+    try:
+        start_date = resolve_date_string(start)
+        end_date = resolve_date_string(end)
+    except Exception as e:
+        raise ValueError(f"날짜 해석 실패: {e}")
 
-    t_start = datetime.datetime.fromisoformat(start)
-    t_end = datetime.datetime.fromisoformat(end)
-    t_start = t_start.replace(hour=0, minute=0, second=0)
-    t_end = t_end.replace(hour=23, minute=59, second=59)
-
-    timeMin = t_start.isoformat() + 'Z'
-    timeMax = t_end.isoformat() + 'Z'
+    start_dt = datetime.datetime.combine(start_date, datetime.time.min)
+    end_dt = datetime.datetime.combine(end_date, datetime.time.max)
+    timeMin = start_dt.isoformat() + 'Z'
+    timeMax = end_dt.isoformat() + 'Z'
 
     events_result = service.events().list(
         calendarId='primary',
@@ -102,24 +61,36 @@ def get_events_by_filter(parsed):
 
     events = events_result.get('items', [])
 
-    # 시간 필터링 (optional)
+    # 시간 필터링
     if time_filter:
-        def in_time_range(event):
+        def in_range(event):
             dt = event['start'].get('dateTime')
             if not dt:
                 return False
             hour = int(dt[11:13])
             if time_filter == "evening":
                 return 18 <= hour <= 22
-            if time_filter == "morning":
-                return 6 <= hour <= 12
-            if time_filter == "afternoon":
-                return 12 <= hour <= 18
+            elif time_filter == "morning":
+                return 6 <= hour < 12
+            elif time_filter == "afternoon":
+                return 12 <= hour < 18
             return True
-        events = list(filter(in_time_range, events))
+        events = list(filter(in_range, events))
 
     # 키워드 필터링
-    if keyword:
-        events = [e for e in events if keyword in e.get('summary', '').lower()]
+    if keyword and isinstance(keyword, str):
+        events = [e for e in events if keyword.lower() in e.get('summary', '').lower()]
 
     return events
+
+def format_event_list(events):
+    result = []
+    for e in events:
+        start_dt = e['start'].get('dateTime', e['start'].get('date'))
+        try:
+            dt = datetime.datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
+            date_str = dt.strftime("%Y-%m-%d (%a) %H:%M")
+        except:
+            date_str = start_dt
+        result.append(f"🗓 {date_str} - {e.get('summary', '제목 없음')}")
+    return "\n".join(result)
