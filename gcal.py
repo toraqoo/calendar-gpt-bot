@@ -13,13 +13,16 @@ def get_calendar_service():
     )
     return build("calendar", "v3", credentials=creds)
 
-def get_events_for_dates(dates):
+def get_events_for_dates(dates, time_filter=None):
     service = get_calendar_service()
     all_events = []
     for date_str in dates:
         date_obj = datetime.date.fromisoformat(date_str)
-        start = datetime.datetime.combine(date_obj, datetime.time.min).isoformat() + 'Z'
-        end = datetime.datetime.combine(date_obj, datetime.time.max).isoformat() + 'Z'
+        start_dt = datetime.datetime.combine(date_obj, datetime.time.min)
+        end_dt = datetime.datetime.combine(date_obj, datetime.time.max)
+        start = start_dt.isoformat() + 'Z'
+        end = end_dt.isoformat() + 'Z'
+
         events_result = service.events().list(
             calendarId='primary',
             timeMin=start,
@@ -29,6 +32,22 @@ def get_events_for_dates(dates):
             orderBy='startTime'
         ).execute()
         items = events_result.get('items', [])
+
+        # ✅ 시간 필터 적용
+        if time_filter:
+            filtered = []
+            for e in items:
+                dt_raw = e['start'].get('dateTime')
+                if not dt_raw:
+                    continue
+                dt = datetime.datetime.fromisoformat(dt_raw.replace('Z', '+00:00'))
+                hour = dt.hour
+                if time_filter == "lunch" and 11 <= hour < 14:
+                    filtered.append(e)
+                elif time_filter == "evening" and 18 <= hour < 21:
+                    filtered.append(e)
+            items = filtered
+
         for e in items:
             e['__date'] = date_str
         all_events.extend(items)
