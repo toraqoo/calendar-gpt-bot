@@ -50,20 +50,20 @@ def extract_dates_from_text(text, today=None):
         base = today + timedelta(weeks=1)
         start, _ = get_week_range(base)
         dates = [start + timedelta(days=i) for i in range(7)]
-    elif '다다음주' in text or '다담주' in text or '2주뒤' in text or '2주 후' in text:
+    elif '다다음주' in text or '다담주' in text or '2주뒤' in text or '2주 후' in text or '2주후' in text or '2주 뒤' in text:
         base = today + timedelta(weeks=2)
         start, _ = get_week_range(base)
         dates = [start + timedelta(days=i) for i in range(7)]
 
-    # '6월 전체', '5월 전체' 등 월 단위
-    elif match := re.search(r'(\d{1,2})월', text):
+    # '6월 전체', '5월 전체', '6월 일정' 등 월 단위
+    elif match := re.search(r'(\d{1,2})월(?:\s*일정)?', text):
         month = int(match.group(1))
         year = today.year if month >= today.month else today.year + 1
         start, end = get_month_range(year, month)
         delta = (end - start).days + 1
         dates = [start + timedelta(days=i) for i in range(delta)]
 
-    # '5/26', '5/26(월)' 등 날짜 표현
+    # '5/26', '5.27', '5/26(월)', '5/27 일정' 등 날짜 표현 (복수 가능)
     elif match := re.findall(r'(\d{1,2})[./](\d{1,2})', text):
         for m, d in match:
             month = int(m)
