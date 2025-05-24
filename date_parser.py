@@ -34,15 +34,15 @@ def extract_dates_from_text(text, today=None):
         time_filter = 'evening'
 
     # 키워드 필터
-    keyword_match = re.search(r"(골프|데이트|회식|미팅|회의|병원|약속|식사)", text)
-    if keyword_match:
+    keyword_match = re.search(r"(골프|데이트|회식|미팅|회의|병원|약속|식사|일정)", text)
+    if keyword_match and keyword_match.group(1) != '일정':
         keyword_filter = keyword_match.group(1)
 
     # '한가' 요청
     if '한가' in text or '비는 날' in text:
         find_available = True
 
-    # 날짜 인식: '6월', '6월 일정', '6월 저녁 일정', '6월 저녁 한가' 등
+    # 날짜 인식: '6월 전체', '6월 일정', '6월 저녁 일정', '6월 저녁 한가' 등
     if match := re.search(r'(\d{1,2})월', text):
         month = int(match.group(1))
         year = today.year if month >= today.month else today.year + 1
