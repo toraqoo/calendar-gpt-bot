@@ -1,15 +1,15 @@
 # gcal.py
+import os
+import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta, time
 
-SERVICE_ACCOUNT_FILE = 'credentials.json'
-SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
-CALENDAR_ID = 'primary'
-
-credentials = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+# ✅ 환경변수에서 credentials 정보 가져오기
+credentials_info = json.loads(os.environ['GOOGLE_CREDENTIALS_JSON'])
+credentials = service_account.Credentials.from_service_account_info(credentials_info)
 service = build('calendar', 'v3', credentials=credentials)
+CALENDAR_ID = 'primary'
 
 def get_events(dates):
     start_date = min(dates).replace(hour=0, minute=0, second=0).isoformat() + 'Z'
