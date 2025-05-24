@@ -1,8 +1,21 @@
 # main.py
+from fastapi import FastAPI
+from pydantic import BaseModel
 from date_parser import extract_dates_from_text
 from gcal import get_events, filter_events, find_available_days, format_event_list, format_available_days
 
-def handle_user_input(user_input):
+app = FastAPI()
+
+class RequestModel(BaseModel):
+    user_input: str
+
+@app.get("/")
+def root():
+    return {"message": "Calendar Bot is running!"}
+
+@app.post("/calendar")
+def calendar_handler(request: RequestModel):
+    user_input = request.user_input
     parsed = extract_dates_from_text(user_input)
     dates = parsed['dates']
     time_filter = parsed['time_filter']
