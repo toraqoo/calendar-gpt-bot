@@ -1,5 +1,5 @@
 # main.py
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from date_parser import extract_dates_from_text
 from gcal import get_events, filter_events, find_available_days, format_event_list, format_available_days
@@ -37,3 +37,10 @@ def calendar_handler(request: RequestModel):
     if not filtered_events:
         return "❌ 해당 조건에 맞는 일정이 없습니다."
     return format_event_list(filtered_events)
+
+@app.post("/webhook")
+async def telegram_webhook(request: Request):
+    data = await request.json()
+    print("📨 텔레그램 메시지 수신:", data)
+    # TODO: 메시지 파싱 및 응답 로직 연결
+    return {"ok": True}
