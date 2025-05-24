@@ -66,24 +66,27 @@ def find_available_days(events, target_dates, time_filter=None):
     return available
 
 def format_event_list(events):
-    grouped_by_week = defaultdict(list)
+    grouped_by_week = defaultdict(lambda: defaultdict(list))
     for e in sorted(events, key=lambda x: x['start']):
         date = e['start'].date()
         week_start = date - timedelta(days=date.weekday())
-        grouped_by_week[week_start].append(e)
+        grouped_by_week[week_start][date].append(e)
 
     lines = []
     for week_start in sorted(grouped_by_week):
         week_end = week_start + timedelta(days=6)
         lines.append(f"\n📅 {week_start.strftime('%m/%d')} ~ {week_end.strftime('%m/%d')} 주간")
-        for e in grouped_by_week[week_start]:
-            start = e['start']
-            end = e['end']
-            duration = end - start
-            day_str = start.strftime('%m/%d(%a)').replace('Mon','월').replace('Tue','화').replace('Wed','수') \
+        for date in sorted(grouped_by_week[week_start]):
+            lines.append("")
+            date_str = date.strftime('%m/%d(%a)').replace('Mon','월').replace('Tue','화').replace('Wed','수') \
                 .replace('Thu','목').replace('Fri','금').replace('Sat','토').replace('Sun','일')
-            time_str = f"{start.strftime('%H:%M')}~{end.strftime('%H:%M')}({int(duration.total_seconds() // 3600)}h)"
-            lines.append(f"- {day_str} {time_str}: {e['summary']}")
+            lines.append(f"{date_str}")
+            for e in grouped_by_week[week_start][date]:
+                start = e['start']
+                end = e['end']
+                duration = end - start
+                time_str = f"{start.strftime('%H:%M')}~{end.strftime('%H:%M')}({int(duration.total_seconds() // 3600)}h)"
+                lines.append(f"- {time_str}: {e['summary']}")
     return "\n".join(lines)
 
 def format_available_days(dates, time_filter=None):
