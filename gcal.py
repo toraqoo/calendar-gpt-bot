@@ -15,6 +15,8 @@ def get_events(dates):
     start_date = min(dates).replace(hour=0, minute=0, second=0).isoformat() + 'Z'
     end_date = (max(dates) + timedelta(days=1)).replace(hour=0, minute=0, second=0).isoformat() + 'Z'
 
+    print("🕓 요청 날짜 범위:", start_date, "~", end_date)  # 디버깅용 출력
+
     events_result = service.events().list(
         calendarId=CALENDAR_ID,
         timeMin=start_date,
@@ -23,8 +25,11 @@ def get_events(dates):
         orderBy='startTime'
     ).execute()
 
+    items = events_result.get('items', [])
+    print("📅 API 호출 결과:", items)  # 디버깅용 출력
+
     events = []
-    for event in events_result.get('items', []):
+    for event in items:
         if 'dateTime' not in event['start']:
             continue  # 하루종일 일정은 제외
 
