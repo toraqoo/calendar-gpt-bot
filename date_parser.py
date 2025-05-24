@@ -1,97 +1,76 @@
-import datetime
 import re
+from datetime import datetime, timedelta
 import calendar
 
-weekday_ko = {"월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6}
+KST = timedelta(hours=9)
 
-def get_date_for_weekday(offset_weeks, weekday):
-    today = datetime.date.today()
-    base = today + datetime.timedelta(days=(7 * offset_weeks - today.weekday()))
-    return base + datetime.timedelta(days=weekday)
+def get_week_range(target_date):
+    start = target_date - timedelta(days=target_date.weekday())
+    end = start + timedelta(days=6)
+    return start, end
 
-def expand_range(start_wd, end_wd):
-    start = weekday_ko[start_wd]
-    end = weekday_ko[end_wd]
-    return [d for d in range(start, end + 1)] if start <= end else []
+def get_month_range(year, month):
+    start = datetime(year, month, 1)
+    last_day = calendar.monthrange(year, month)[1]
+    end = datetime(year, month, last_day)
+    return start, end
 
-def extract_dates_from_text(text):
-    today = datetime.date.today()
-    dates = set()
+def extract_dates_from_text(text, today=None):
+    if today is None:
+        today = datetime.now() + KST
+
+    text = text.lower()
+    dates = []
     time_filter = None
     keyword_filter = None
-    available_only = "한가" in text
-    weekday_filter = []
+    find_available = False
+    weekdays_kor = {'월': 0, '화': 1, '수': 2, '목': 3, '금': 4, '토': 5, '일': 6}
 
-    # 시간 필터
-    if "저녁" in text:
-        time_filter = "evening"
-    elif "점심" in text:
-        time_filter = "lunch"
+    # 시간대 필터
+    if '점심' in text:
+        time_filter = 'lunch'
+    elif '저녁' in text:
+        time_filter = 'evening'
 
     # 키워드 필터
-    kw_match = re.search(r"(전체)?\s*(골프|회의|미팅|세무|데모|데이트|저녁|점심)", text)
-    if kw_match:
-        word = kw_match.group(2)
-        if word not in ["저녁", "점심"]:
-            keyword_filter = word
+    keyword_match = re.search(r"(골프|데이트|회식|미팅|회의|병원|약속|식사)", text)
+    if keyword_match:
+        keyword_filter = keyword_match.group(1)
 
-    # 월 전체 날짜 처리
-    m = re.search(r"(\d{1,2})월", text)
-    if m:
-        month = int(m.group(1))
-        if "전체" in text or "일정" in text:
-            year = today.year
-            last_day = calendar.monthrange(year, month)[1]
-            for day in range(1, last_day + 1):
-                dates.add(datetime.date(year, month, day))
+    # '한가' → 해당 시간대에 일정 없는 요일
+    if '한가' in text or '비는 날' in text:
+        find_available = True
 
-    # 5/26 형식
-    md_pattern = re.findall(r"\b(\d{1,2})/(\d{1,2})\b", text)
-    for month, day in md_pattern:
-        try:
-            dt = datetime.date(today.year, int(month), int(day))
-            dates.add(dt)
-        except:
-            continue
+    # 주차 표현 인식
+    if '이번주' in text:
+        start, end = get_week_range(today)
+        dates = [start + timedelta(days=i) for i in range(7)]
+    elif '다음주' in text or '담주' in text:
+        base = today + timedelta(weeks=1)
+        start, end = get_week_range(base)
+        dates = [start + timedelta(days=i) for i in range(7)]
+    elif '다다음주' in text or '다담주' in text or '2주뒤' in text or '2주 후' in text or '2주뒤' in text or '2주후' in text:
+        base = today + timedelta(weeks=2)
+        start, end = get_week_range(base)
+        dates = [start + timedelta(days=i) for i in range(7)]
+    elif match := re.search(r'(\d{1,2})월', text):
+        month = int(match.group(1))
+        year = today.year if month >= today.month else today.year + 1
+        start, end = get_month_range(year, month)
+        delta = (end - start).days + 1
+        dates = [start + timedelta(days=i) for i in range(delta)]
+    
+    # 평일/요일 필터 추가
+    if '평일' in text:
+        dates = [d for d in dates if d.weekday() < 5]
 
-    # 주차 키워드
-    prefix_map = {
-        "다다음주": 2, "다담주": 2, "다음다음주": 2,
-        "다음주": 1, "담주": 1, "1주뒤": 1, "1주 뒤": 1, "1주후": 1, "1주 후": 1,
-        "이번주": 0, "0주뒤": 0
+    elif any(day in text for day in weekdays_kor):
+        days = [weekdays_kor[day] for day in weekdays_kor if day in text]
+        dates = [d for d in dates if d.weekday() in days]
+
+    return {
+        'dates': sorted(list(set(dates))),
+        'time_filter': time_filter,
+        'keyword_filter': keyword_filter,
+        'find_available': find_available,
     }
-    for prefix, offset in prefix_map.items():
-        if prefix in text:
-            after = text.split(prefix)[-1]
-            match = re.search(rf"{prefix}\s*([월화수목금토일])부터\s*([월화수목금토일])까지", text)
-            if match:
-                wd1, wd2 = match.groups()
-                for i in expand_range(wd1, wd2):
-                    dates.add(get_date_for_weekday(offset, i))
-            else:
-                parts = re.findall(r"[월화수목금토일]", after)
-                for p in parts:
-                    if p in weekday_ko:
-                        dates.add(get_date_for_weekday(offset, weekday_ko[p]))
-            if not re.search(r"[월화수목금토일]", after):
-                for i in range(7):
-                    dates.add(get_date_for_weekday(offset, i))
-
-    # 평일/주말 필터
-    if "평일" in text:
-        weekday_filter = [0, 1, 2, 3, 4]
-    elif "주말" in text:
-        weekday_filter = [5, 6]
-
-    # 쉼표 구분 복수 날짜
-    if "," in text:
-        md_multi = re.findall(r"(\d{1,2})/(\d{1,2})", text)
-        for month, day in md_multi:
-            try:
-                dt = datetime.date(today.year, int(month), int(day))
-                dates.add(dt)
-            except:
-                continue
-
-    final_dates = [d for d in sorted(dates) if not weekday_filter or d.weekday() in weekday_filter]
-    return [d.isoformat() for d in final_dates], time_filter, keyword_filter, available_only, weekday_filter
