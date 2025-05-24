@@ -78,8 +78,8 @@ def extract_dates_from_text(text, today=None):
     if '평일' in text:
         dates = [d for d in dates if d.weekday() < 5]
 
-    # 요일 필터 (예: '다다음주 월화수') → 월 단위 포함 전체 날짜 후에 적용되면 문제되므로 제외
-    elif any(day in text for day in weekdays_kor):
+    # 요일 필터 (예: '월', '화', ...) → 숫자월이 없는 경우에만 요일 필터 적용
+    elif any(day in text for day in weekdays_kor) and not re.search(r'\d{1,2}월', text):
         if dates:
             days = [weekdays_kor[day] for day in weekdays_kor if day in text]
             dates = [d for d in dates if d.weekday() in days]
