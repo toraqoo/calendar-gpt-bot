@@ -3,6 +3,7 @@ from googleapiclient.discovery import build
 import os
 import datetime
 
+
 def get_calendar_service():
     creds = Credentials(
         None,
@@ -13,7 +14,8 @@ def get_calendar_service():
     )
     return build("calendar", "v3", credentials=creds)
 
-def get_events_for_dates(dates, time_filter=None):
+
+def get_events_for_dates(dates, time_filter=None, keyword_filter=None):
     service = get_calendar_service()
     all_events = []
     for date_str in dates:
@@ -33,25 +35,24 @@ def get_events_for_dates(dates, time_filter=None):
         ).execute()
         items = events_result.get('items', [])
 
-        # ✅ 시간 필터 적용
-        if time_filter:
-            filtered = []
-            for e in items:
-                dt_raw = e['start'].get('dateTime')
-                if not dt_raw:
-                    continue
+        filtered = []
+        for e in items:
+            dt_raw = e['start'].get('dateTime')
+            if dt_raw:
                 dt = datetime.datetime.fromisoformat(dt_raw.replace('Z', '+00:00'))
                 hour = dt.hour
-                if time_filter == "lunch" and 11 <= hour < 14:
-                    filtered.append(e)
-                elif time_filter == "evening" and 18 <= hour < 21:
-                    filtered.append(e)
-            items = filtered
+                if time_filter == "lunch" and not (11 <= hour < 14):
+                    continue
+                if time_filter == "evening" and not (18 <= hour < 21):
+                    continue
+            if keyword_filter and keyword_filter not in e.get('summary', '').lower():
+                continue
+            e['__date'] = dt.date().isoformat() if dt_raw else date_str
+            filtered.append(e)
 
-        for e in items:
-            e['__date'] = date_str
-        all_events.extend(items)
+        all_events.extend(filtered)
     return all_events
+
 
 def summarize_events_compact(dates, events):
     weekday_ko = ["월", "화", "수", "목", "금", "토", "일"]
@@ -85,3 +86,18 @@ def summarize_events_compact(dates, events):
         result.append(header + "\n" + "\n".join(rows))
 
     return "\n\n".join(result)
+
+
+def summarize_available_days(dates, time_filter):
+    weekday_ko = ["월", "화", "수", "목", "금", "토", "일"]
+    events = get_events_for_dates(dates, time_filter=time_filter)
+    busy_dates = {e['__date'] for e in events}
+    available = [d for d in dates if d not in busy_dates]
+    if not available:
+        return "📅 요청하신 조건에 한가한 날이 없습니다."
+    rows = []
+    for d in available:
+        date_obj = datetime.date.fromisoformat(d)
+        dow = weekday_ko[date_obj.weekday()]
+        rows.append(f"- {d[5:]}({dow})")
+    return "🗓 한가한 날:\n" + "\n".join(rows)
