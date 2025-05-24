@@ -34,7 +34,8 @@ def format_event_list(events):
         if key in seen:
             continue
         seen.add(key)
-        day_str = start.strftime('%y/%m/%d(%a)').replace('Mon', '월').replace('Tue', '화').replace('Wed', '수').replace('Thu', '목').replace('Fri', '금').replace('Sat', '토').replace('Sun', '일')
+        day_str = start.strftime('%y/%m/%d(%a)').replace('Mon', '월').replace('Tue', '화').replace('Wed', '수') \
+            .replace('Thu', '목').replace('Fri', '금').replace('Sat', '토').replace('Sun', '일')
         time_str = f"{start.strftime('%H:%M')}~{end.strftime('%H:%M')}({int(duration.total_seconds() // 3600)}h)"
         lines.append(f"📅 {day_str}\n- {time_str}: {title}")
     return "\n\n".join(lines)
@@ -42,6 +43,7 @@ def format_event_list(events):
 def format_available_days(dates):
     lines = []
     for d in sorted(dates):
-        day_str = d.strftime('%y/%m/%d(%a)').replace('Mon', '월').replace('Tue', '화').replace('Wed', '수').replace('Thu', '목').replace('Fri', '금').replace('Sat', '토').replace('Sun', '일')
+        day_str = d.strftime('%y/%m/%d(%a)').replace('Mon', '월').replace('Tue', '화').replace('Wed', '수') \
+            .replace('Thu', '목').replace('Fri', '금').replace('Sat', '토').replace('Sun', '일')
         lines.append(f"✅ {day_str} 점심시간(11~14시) 비어 있음")
     return "\n".join(lines)
