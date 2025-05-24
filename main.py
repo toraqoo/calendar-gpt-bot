@@ -69,4 +69,4 @@ async def telegram_webhook(request: Request):
     if res.status_code != 200:
         print("❌ 텔레그램 응답 실패:", res.text)
 
-    return {"ok": True"}
+    return {"ok": True}
