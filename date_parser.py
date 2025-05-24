@@ -55,8 +55,8 @@ def extract_dates_from_text(text, today=None):
         start, _ = get_week_range(today)
         dates = [start + timedelta(days=i) for i in range(7)]
 
-    # '6월 전체', '5월 일정' 등 월 단위
-    elif match := re.search(r'(\d{1,2})월(?:\s*일정)?', text):
+    # '6월 전체', '5월 일정', '6월 저녁 일정' 등 월 단위
+    if match := re.search(r'(\d{1,2})월', text):
         month = int(match.group(1))
         year = today.year if month >= today.month else today.year + 1
         start, end = get_month_range(year, month)
@@ -78,10 +78,11 @@ def extract_dates_from_text(text, today=None):
     if '평일' in text:
         dates = [d for d in dates if d.weekday() < 5]
 
-    # 요일 필터 (예: '다다음주 월화수')
+    # 요일 필터 (예: '다다음주 월화수') → 월 단위 포함 전체 날짜 후에 적용되면 문제되므로 제외
     elif any(day in text for day in weekdays_kor):
-        days = [weekdays_kor[day] for day in weekdays_kor if day in text]
-        dates = [d for d in dates if d.weekday() in days]
+        if dates:
+            days = [weekdays_kor[day] for day in weekdays_kor if day in text]
+            dates = [d for d in dates if d.weekday() in days]
 
     return {
         'dates': sorted(list(set(dates))),
