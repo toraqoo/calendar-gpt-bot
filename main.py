@@ -1,10 +1,13 @@
 # main.py
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
+import requests
 from date_parser import extract_dates_from_text
 from gcal import get_events, filter_events, find_available_days, format_event_list, format_available_days
 
 app = FastAPI()
+
+BOT_TOKEN = "<YOUR_TELEGRAM_BOT_TOKEN>"  # ✅ 실제 토큰으로 바꿔주세요
 
 class RequestModel(BaseModel):
     user_input: str
@@ -42,5 +45,22 @@ def calendar_handler(request: RequestModel):
 async def telegram_webhook(request: Request):
     data = await request.json()
     print("📨 텔레그램 메시지 수신:", data)
-    # TODO: 메시지 파싱 및 응답 로직 연결
+
+    message = data.get("message", {})
+    chat_id = message.get("chat", {}).get("id")
+    text = message.get("text")
+
+    if not chat_id or not text:
+        return {"ok": True}
+
+    response_text = calendar_handler(RequestModel(user_input=text))
+
+    requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+        json={
+            "chat_id": chat_id,
+            "text": response_text
+        }
+    )
+
     return {"ok": True}
