@@ -42,7 +42,7 @@ def extract_dates_from_text(text, today=None):
     if '한가' in text or '비는 날' in text:
         find_available = True
 
-    # 날짜 인식: '6월 전체', '6월 일정', '6월 저녁 일정', '6월 저녁 한가' 등
+    # 날짜 인식: '6월', '6월 일정', '6월 저녁 일정', '6월 저녁 한가' 등
     if match := re.search(r'(\d{1,2})월', text):
         month = int(match.group(1))
         year = today.year if month >= today.month else today.year + 1
@@ -63,7 +63,7 @@ def extract_dates_from_text(text, today=None):
         start, _ = get_week_range(today)
         dates = [start + timedelta(days=i) for i in range(7)]
 
-    # '5/26', '5.27', '5/26(월)', '5/27 일정' 등 날짜 표현 (복수 가능)
+    # 날짜 표현 (복수 허용)
     elif match := re.findall(r'(\d{1,2})[./](\d{1,2})', text):
         for m, d in match:
             month = int(m)
@@ -74,11 +74,13 @@ def extract_dates_from_text(text, today=None):
             except ValueError:
                 continue
 
-    # 평일 필터
+    # 평일/주말 필터
     if '평일' in text:
         dates = [d for d in dates if d.weekday() < 5]
+    elif '주말' in text:
+        dates = [d for d in dates if d.weekday() >= 5]
 
-    # 요일 필터 (예: '월', '화', ...) → 숫자월이 없는 경우에만 요일 필터 적용
+    # 요일 필터 (단 숫자월 없을 때만 적용)
     elif any(day in text for day in weekdays_kor) and not re.search(r'\d{1,2}월', text):
         if dates:
             days = [weekdays_kor[day] for day in weekdays_kor if day in text]
