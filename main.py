@@ -7,7 +7,8 @@ from gcal import get_events, filter_events, find_available_days, format_event_li
 
 app = FastAPI()
 
-BOT_TOKEN = "<YOUR_TELEGRAM_BOT_TOKEN>"  # ✅ 실제 토큰으로 바꿔주세요
+# ✅ Mk님의 실제 텔레그램 봇 토큰
+BOT_TOKEN = "7447570847:AAFtmC8xPmvK-m0mT-oVh5IDrjY_X5Ve718"
 
 class RequestModel(BaseModel):
     user_input: str
@@ -53,9 +54,11 @@ async def telegram_webhook(request: Request):
     if not chat_id or not text:
         return {"ok": True}
 
-    response_text = calendar_handler(RequestModel(user_input=text))
+    # ✅ 일정 응답 처리
+    response_text = str(calendar_handler(RequestModel(user_input=text)))
 
-    requests.post(
+    # ✅ 텔레그램에 응답 전송
+    res = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
         json={
             "chat_id": chat_id,
@@ -63,4 +66,7 @@ async def telegram_webhook(request: Request):
         }
     )
 
-    return {"ok": True}
+    if res.status_code != 200:
+        print("❌ 텔레그램 응답 실패:", res.text)
+
+    return {"ok": True"}
