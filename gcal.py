@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, time
 credentials_info = json.loads(os.environ['GOOGLE_CREDENTIALS_JSON'])
 credentials = service_account.Credentials.from_service_account_info(credentials_info)
 service = build('calendar', 'v3', credentials=credentials)
-CALENDAR_ID = 'primary'
+CALENDAR_ID = 'mk@bonanza-factory.co.kr'  # ← Mk님 실제 캘린더 ID로 수정
 
 def get_events(dates):
     start_date = min(dates).replace(hour=0, minute=0, second=0).isoformat() + 'Z'
