@@ -42,8 +42,16 @@ def extract_dates_from_text(text, today=None):
     if '한가' in text or '비는 날' in text:
         find_available = True
 
+    # 날짜 인식: '6월 전체', '6월 일정', '6월 저녁 일정', '6월 저녁 한가' 등
+    if match := re.search(r'(\d{1,2})월', text):
+        month = int(match.group(1))
+        year = today.year if month >= today.month else today.year + 1
+        start, end = get_month_range(year, month)
+        delta = (end - start).days + 1
+        dates = [start + timedelta(days=i) for i in range(delta)]
+
     # 주차 표현
-    if '다다음주' in text or '다담주' in text or '2주뒤' in text or '2주 후' in text or '2주후' in text or '2주 뒤' in text:
+    elif '다다음주' in text or '다담주' in text or '2주뒤' in text or '2주 후' in text or '2주후' in text or '2주 뒤' in text:
         base = today + timedelta(weeks=2)
         start, _ = get_week_range(base)
         dates = [start + timedelta(days=i) for i in range(7)]
@@ -54,14 +62,6 @@ def extract_dates_from_text(text, today=None):
     elif '이번주' in text:
         start, _ = get_week_range(today)
         dates = [start + timedelta(days=i) for i in range(7)]
-
-    # '6월 전체', '5월 일정', '6월 저녁 일정' 등 월 단위
-    if match := re.search(r'(\d{1,2})월', text):
-        month = int(match.group(1))
-        year = today.year if month >= today.month else today.year + 1
-        start, end = get_month_range(year, month)
-        delta = (end - start).days + 1
-        dates = [start + timedelta(days=i) for i in range(delta)]
 
     # '5/26', '5.27', '5/26(월)', '5/27 일정' 등 날짜 표현 (복수 가능)
     elif match := re.findall(r'(\d{1,2})[./](\d{1,2})', text):
