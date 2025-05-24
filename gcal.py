@@ -52,7 +52,7 @@ def filter_events(events, time_filter=None, keyword_filter=None):
 
         if time_filter == 'lunch' and not time(11, 0) <= start_time <= time(14, 0):
             continue
-        if time_filter == 'evening' and not time(17, 0) <= start_time <= time(20, 0):  # ✅ 저녁 범위 조정
+        if time_filter == 'evening' and not time(17, 0) <= start_time <= time(20, 0):
             continue
         if keyword_filter and keyword_filter not in title:
             continue
@@ -82,6 +82,7 @@ def format_event_list(events):
             duration = end - start
             time_str = f"{start.strftime('%H:%M')}~{end.strftime('%H:%M')}({int(duration.total_seconds() // 3600)}h)"
             lines.append(f"- {time_str}: {e['summary']}")
+        lines.append("")  # ✅ 날짜 구분 공백
     return "\n".join(lines)
 
 def format_available_days(dates, time_filter=None):
