@@ -1,3 +1,4 @@
+# date_parser.py
 import re
 from datetime import datetime, timedelta
 import calendar
@@ -37,33 +38,47 @@ def extract_dates_from_text(text, today=None):
     if keyword_match:
         keyword_filter = keyword_match.group(1)
 
-    # '한가' → 해당 시간대에 일정 없는 요일
+    # '한가' 요청
     if '한가' in text or '비는 날' in text:
         find_available = True
 
-    # 주차 표현 인식
+    # 주차 표현
     if '이번주' in text:
-        start, end = get_week_range(today)
+        start, _ = get_week_range(today)
         dates = [start + timedelta(days=i) for i in range(7)]
     elif '다음주' in text or '담주' in text:
         base = today + timedelta(weeks=1)
-        start, end = get_week_range(base)
+        start, _ = get_week_range(base)
         dates = [start + timedelta(days=i) for i in range(7)]
-    elif '다다음주' in text or '다담주' in text or '2주뒤' in text or '2주 후' in text or '2주뒤' in text or '2주후' in text:
+    elif '다다음주' in text or '다담주' in text or '2주뒤' in text or '2주 후' in text:
         base = today + timedelta(weeks=2)
-        start, end = get_week_range(base)
+        start, _ = get_week_range(base)
         dates = [start + timedelta(days=i) for i in range(7)]
+
+    # '6월 전체', '5월 전체' 등 월 단위
     elif match := re.search(r'(\d{1,2})월', text):
         month = int(match.group(1))
         year = today.year if month >= today.month else today.year + 1
         start, end = get_month_range(year, month)
         delta = (end - start).days + 1
         dates = [start + timedelta(days=i) for i in range(delta)]
-    
-    # 평일/요일 필터 추가
+
+    # '5/26', '5/26(월)' 등 날짜 표현
+    elif match := re.findall(r'(\d{1,2})[./](\d{1,2})', text):
+        for m, d in match:
+            month = int(m)
+            day = int(d)
+            year = today.year if month >= today.month else today.year + 1
+            try:
+                dates.append(datetime(year, month, day))
+            except ValueError:
+                continue
+
+    # 평일 필터
     if '평일' in text:
         dates = [d for d in dates if d.weekday() < 5]
 
+    # 요일 필터 (예: '다음주 월화수')
     elif any(day in text for day in weekdays_kor):
         days = [weekdays_kor[day] for day in weekdays_kor if day in text]
         dates = [d for d in dates if d.weekday() in days]
