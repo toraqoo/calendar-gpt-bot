@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 import os
 import httpx
-from gcal import get_events_for_dates, summarize_events_compact
+from gcal import get_events_for_dates, summarize_events_compact, summarize_available_days
 from date_parser import extract_dates_from_text
 
 app = FastAPI()
@@ -11,7 +11,7 @@ API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 @app.get("/")
 def root():
-    return {"message": "Mk 일정 비서 v10 - 날짜 파싱 고정형"}
+    return {"message": "Mk 일정 비서 v11 - 한가, 키워드, 평일 포함"}
 
 @app.post("/webhook")
 async def telegram_webhook(req: Request):
@@ -23,18 +23,22 @@ async def telegram_webhook(req: Request):
         return {"ok": False}
 
     if user_text.startswith("/start"):
-        await send(chat_id, "Mk 일정 비서입니다! 다음과 같이 질문해보세요:\n- 5/26 일정은?\n- 다음주 월화수 일정은?\n- 이번주 월, 화 일정 알려줘\n- 담주 저녁 약속 알려줘")
+        await send(chat_id, "Mk 일정 비서입니다! 예: 6월 전체 골프, 다음주 점심 한가, 다담주 월화수, 다음주 평일 저녁")
         return {"ok": True}
 
     try:
-        dates, time_filter = extract_dates_from_text(user_text)
+        dates, time_filter, keyword_filter, available_only, weekday_filter = extract_dates_from_text(user_text)
         if not dates:
-            await send(chat_id, "❗ 날짜를 인식하지 못했어요. 예: '5/26', '다음주 월', '이번주 월화수'")
+            await send(chat_id, "❗ 날짜를 인식하지 못했어요. 예: '5/26', '다음주 월', '6월 전체'")
             return {"ok": True}
 
-        events = get_events_for_dates(dates, time_filter=time_filter)
-        summary = summarize_events_compact(dates, events)
-        await send(chat_id, summary)
+        if available_only:
+            result = summarize_available_days(dates, time_filter)
+        else:
+            events = get_events_for_dates(dates, time_filter=time_filter, keyword_filter=keyword_filter)
+            result = summarize_events_compact(dates, events)
+
+        await send(chat_id, result)
 
     except Exception as e:
         await send(chat_id, f"[오류] {str(e)}")
