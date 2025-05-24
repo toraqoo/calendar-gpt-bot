@@ -4,12 +4,13 @@ import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta, time
+from collections import defaultdict
 
 # ✅ 환경변수에서 credentials 정보 가져오기
 credentials_info = json.loads(os.environ['GOOGLE_CREDENTIALS_JSON'])
 credentials = service_account.Credentials.from_service_account_info(credentials_info)
 service = build('calendar', 'v3', credentials=credentials)
-CALENDAR_ID = 'mk@bonanza-factory.co.kr'  # ← Mk님 실제 캘린더 ID로 수정
+CALENDAR_ID = 'mk@bonanza-factory.co.kr'
 
 def get_events(dates):
     start_date = min(dates).replace(hour=0, minute=0, second=0).isoformat() + 'Z'
@@ -51,7 +52,7 @@ def filter_events(events, time_filter=None, keyword_filter=None):
 
         if time_filter == 'lunch' and not time(11, 0) <= start_time <= time(14, 0):
             continue
-        if time_filter == 'evening' and not time(18, 0) <= start_time <= time(21, 0):
+        if time_filter == 'evening' and not time(17, 0) <= start_time <= time(20, 0):  # ✅ 저녁 범위 조정
             continue
         if keyword_filter and keyword_filter not in title:
             continue
@@ -66,27 +67,28 @@ def find_available_days(events, target_dates, time_filter=None):
     return available
 
 def format_event_list(events):
-    seen = set()
-    lines = []
+    grouped = defaultdict(list)
     for e in sorted(events, key=lambda x: x['start']):
-        start = e['start']
-        end = e['end']
-        title = e['summary']
-        duration = end - start
-        key = (start, end, title)
-        if key in seen:
-            continue
-        seen.add(key)
-        day_str = start.strftime('%y/%m/%d(%a)').replace('Mon', '월').replace('Tue', '화').replace('Wed', '수') \
-            .replace('Thu', '목').replace('Fri', '금').replace('Sat', '토').replace('Sun', '일')
-        time_str = f"{start.strftime('%H:%M')}~{end.strftime('%H:%M')}({int(duration.total_seconds() // 3600)}h)"
-        lines.append(f"\U0001F4C5 {day_str}\n- {time_str}: {title}")
-    return "\n\n".join(lines)
+        grouped[e['start'].date()].append(e)
 
-def format_available_days(dates):
+    lines = []
+    for day, day_events in grouped.items():
+        day_str = day.strftime('%y/%m/%d(%a)').replace('Mon', '월').replace('Tue', '화').replace('Wed', '수') \
+            .replace('Thu', '목').replace('Fri', '금').replace('Sat', '토').replace('Sun', '일')
+        lines.append(f"\U0001F4C5 {day_str}")
+        for e in day_events:
+            start = e['start']
+            end = e['end']
+            duration = end - start
+            time_str = f"{start.strftime('%H:%M')}~{end.strftime('%H:%M')}({int(duration.total_seconds() // 3600)}h)"
+            lines.append(f"- {time_str}: {e['summary']}")
+    return "\n".join(lines)
+
+def format_available_days(dates, time_filter=None):
+    label = "점심시간(11~14시)" if time_filter == 'lunch' else "저녁시간(17~20시)" if time_filter == 'evening' else "비어 있음"
     lines = []
     for d in sorted(dates):
         day_str = d.strftime('%y/%m/%d(%a)').replace('Mon', '월').replace('Tue', '화').replace('Wed', '수') \
             .replace('Thu', '목').replace('Fri', '금').replace('Sat', '토').replace('Sun', '일')
-        lines.append(f"✅ {day_str} 점심시간(11~14시) 비어 있음")
+        lines.append(f"✅ {day_str} {label}")
     return "\n".join(lines)
