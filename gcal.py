@@ -18,6 +18,8 @@ def get_calendar_service():
 def get_events_for_dates(dates, time_filter=None, keyword_filter=None):
     service = get_calendar_service()
     all_events = []
+    seen = set()
+
     for date_str in dates:
         date_obj = datetime.date.fromisoformat(date_str)
         start_dt = datetime.datetime.combine(date_obj, datetime.time.min)
@@ -45,8 +47,14 @@ def get_events_for_dates(dates, time_filter=None, keyword_filter=None):
                     continue
                 if time_filter == "evening" and not (18 <= hour < 21):
                     continue
-            if keyword_filter and keyword_filter not in e.get('summary', '').lower():
+            if keyword_filter and keyword_filter.lower() not in e.get('summary', '').lower():
                 continue
+
+            key = (e.get('summary'), e['start'].get('dateTime'))
+            if key in seen:
+                continue
+            seen.add(key)
+
             e['__date'] = dt.date().isoformat() if dt_raw else date_str
             filtered.append(e)
 
