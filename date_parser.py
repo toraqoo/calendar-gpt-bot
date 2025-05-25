@@ -40,16 +40,19 @@ def extract_dates_from_text(text, today=None):
     if '한가' in text or '비는 날' in text:
         find_available = True
 
-    # ✅ split 제거 — 전체 문장을 그대로 분석
+    # ✅ split 제거 — 전체 문장 그대로 분석
     expressions = [text]
     for exp in expressions:
         exp = exp.strip()
 
-        # ✅ 상대 날짜 표현 우선 매칭 (우선순위: 긴 단어 → 짧은 단어)
-        if any(kw in exp for kw in ['내일모레', '낼모레']):
+        # ✅ 상대 날짜 표현: 긴 표현 → 짧은 표현 순으로 분기
+        if '내일모레' in exp or '낼모레' in exp:
             dates.add((today + timedelta(days=2)).date())
             continue
-        if any(kw in exp for kw in ['내일', '낼']):
+        if '낼' in exp and '모레' not in exp:
+            dates.add((today + timedelta(days=1)).date())
+            continue
+        if '내일' in exp:
             dates.add((today + timedelta(days=1)).date())
             continue
         if '모레' in exp:
