@@ -1,4 +1,3 @@
-# gcal.py
 import os
 import json
 from google.oauth2 import service_account
@@ -6,11 +5,13 @@ from googleapiclient.discovery import build
 from datetime import datetime, timedelta, time
 from collections import defaultdict
 
+# 구글 인증 설정
 credentials_info = json.loads(os.environ['GOOGLE_CREDENTIALS_JSON'])
 credentials = service_account.Credentials.from_service_account_info(credentials_info)
 service = build('calendar', 'v3', credentials=credentials)
 CALENDAR_ID = 'mk@bonanza-factory.co.kr'
 
+# 일정 가져오기
 def get_events(dates):
     start_date = min(dates).replace(hour=0, minute=0, second=0).isoformat() + 'Z'
     end_date = (max(dates) + timedelta(days=1)).replace(hour=0, minute=0, second=0).isoformat() + 'Z'
@@ -37,6 +38,7 @@ def get_events(dates):
         })
     return events
 
+# 필터링
 def filter_events(events, time_filter=None, keyword_filter=None):
     result = []
     for e in events:
@@ -51,6 +53,7 @@ def filter_events(events, time_filter=None, keyword_filter=None):
         result.append(e)
     return result
 
+# 한가한 날 찾기
 def find_available_days(events, target_dates, time_filter=None):
     busy_days = set()
     for e in filter_events(events, time_filter=time_filter):
@@ -58,11 +61,28 @@ def find_available_days(events, target_dates, time_filter=None):
     available = [d for d in target_dates if d.date() not in busy_days]
     return available
 
+# 주차 라벨 포맷
 def format_week_label(week_start):
     month = week_start.month
     week_of_month = (week_start.day - 1) // 7 + 1
     return f"[ {month}M{week_of_month}W : {week_start.strftime('%m/%d')} ~ {(week_start + timedelta(days=6)).strftime('%m/%d')} ]"
 
+# ✅ 이모지 붙이는 함수
+def attach_emoji_to_event(summary: str) -> str:
+    emoji_map = {
+        "회의": "📝",
+        "점심": "🍽️",
+        "저녁": "🍽️",
+        "워크샵": "🧠",
+        "골프": "⛳",
+        "SMS": "🎭"
+    }
+    for keyword, emoji in emoji_map.items():
+        if keyword in summary:
+            return f"{emoji} {summary}"
+    return summary
+
+# ✅ 일정 출력 (이모지 포함)
 def format_event_list(events):
     grouped_by_week = defaultdict(lambda: defaultdict(list))
     for e in sorted(events, key=lambda x: x['start']):
@@ -72,7 +92,7 @@ def format_event_list(events):
 
     lines = []
     for week_start in sorted(grouped_by_week):
-        lines.append(f"\n{format_week_label(week_start)}")
+        lines.append(f"\n🗓️ {format_week_label(week_start)}")
         for date in sorted(grouped_by_week[week_start]):
             lines.append("")
             date_str = date.strftime('%m/%d(%a)').replace('Mon','월').replace('Tue','화').replace('Wed','수') \
@@ -84,9 +104,11 @@ def format_event_list(events):
                 duration = (end - start).total_seconds() / 3600
                 duration_str = f"{duration:.1f}".rstrip("0").rstrip(".")
                 time_str = f"{start.strftime('%H:%M')}~{end.strftime('%H:%M')}({duration_str}h)"
-                lines.append(f"- {time_str}: {e['summary']}")
+                summary_with_emoji = attach_emoji_to_event(e['summary'])
+                lines.append(f"- {time_str}: {summary_with_emoji}")
     return "\n".join(lines)
 
+# 한가한 날 포맷
 def format_available_days(dates, time_filter=None):
     label = "점심시간(11~14시)" if time_filter == 'lunch' else "저녁시간(17~20시)" if time_filter == 'evening' else "비어 있음"
     grouped_by_week = defaultdict(list)
@@ -96,7 +118,7 @@ def format_available_days(dates, time_filter=None):
 
     lines = []
     for week_start in sorted(grouped_by_week):
-        lines.append(f"\n{format_week_label(week_start)}")
+        lines.append(f"\n🗓️ {format_week_label(week_start)}")
         for d in grouped_by_week[week_start]:
             day_str = d.strftime('%m/%d(%a)').replace('Mon','월').replace('Tue','화').replace('Wed','수') \
                 .replace('Thu','목').replace('Fri','금').replace('Sat','토').replace('Sun','일')
