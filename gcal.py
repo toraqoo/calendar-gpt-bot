@@ -1,3 +1,4 @@
+# gcal.py
 import os
 import json
 from google.oauth2 import service_account
@@ -5,7 +6,6 @@ from googleapiclient.discovery import build
 from datetime import datetime, timedelta, time
 from collections import defaultdict
 
-# 인증 정보
 credentials_info = json.loads(os.environ['GOOGLE_CREDENTIALS_JSON'])
 credentials = service_account.Credentials.from_service_account_info(credentials_info)
 service = build('calendar', 'v3', credentials=credentials)
@@ -58,6 +58,11 @@ def find_available_days(events, target_dates, time_filter=None):
     available = [d for d in target_dates if d.date() not in busy_days]
     return available
 
+def format_week_label(week_start):
+    month = week_start.month
+    week_of_month = (week_start.day - 1) // 7 + 1
+    return f"[ {month}M{week_of_month}W : {week_start.strftime('%m/%d')} ~ {(week_start + timedelta(days=6)).strftime('%m/%d')} ]"
+
 def format_event_list(events):
     grouped_by_week = defaultdict(lambda: defaultdict(list))
     for e in sorted(events, key=lambda x: x['start']):
@@ -66,9 +71,8 @@ def format_event_list(events):
         grouped_by_week[week_start][date].append(e)
 
     lines = []
-    for i, week_start in enumerate(sorted(grouped_by_week), start=1):
-        week_end = week_start + timedelta(days=6)
-        lines.append(f"\n[ {i}w : {week_start.strftime('%m/%d')} ~ {week_end.strftime('%m/%d')} ]")
+    for week_start in sorted(grouped_by_week):
+        lines.append(f"\n{format_week_label(week_start)}")
         for date in sorted(grouped_by_week[week_start]):
             lines.append("")
             date_str = date.strftime('%m/%d(%a)').replace('Mon','월').replace('Tue','화').replace('Wed','수') \
@@ -91,9 +95,8 @@ def format_available_days(dates, time_filter=None):
         grouped_by_week[week_start].append(d)
 
     lines = []
-    for i, week_start in enumerate(sorted(grouped_by_week), start=1):
-        week_end = week_start + timedelta(days=6)
-        lines.append(f"\n[ {i}w : {week_start.strftime('%m/%d')} ~ {week_end.strftime('%m/%d')} ]")
+    for week_start in sorted(grouped_by_week):
+        lines.append(f"\n{format_week_label(week_start)}")
         for d in grouped_by_week[week_start]:
             day_str = d.strftime('%m/%d(%a)').replace('Mon','월').replace('Tue','화').replace('Wed','수') \
                 .replace('Thu','목').replace('Fri','금').replace('Sat','토').replace('Sun','일')
