@@ -28,64 +28,64 @@ def extract_dates_from_text(text, today=None):
     time_filter = None
     keyword_filter = None
     find_available = False
-    weekday_filter = None  # ← 최종 복합 포인트
+    weekday_filter = None
 
     weekdays_kor = {'월': 0, '화': 1, '수': 2, '목': 3, '금': 4, '토': 5, '일': 6}
 
     # 시간대 필터
-    if 'uc810uc2ec' in text:
+    if '점심' in text:
         time_filter = 'lunch'
-    elif 'uc800uc5b4' in text:
+    elif '저녁' in text:
         time_filter = 'evening'
 
-    # 균정 필터
-    keyword_match = re.search(r"(\uace0\uc2a4|\ub370\uc774\ud2b8|\ud68c신|\ubbf8팅|\ud68c의|\ubcd1원|\uc57d속|\uc2dd사)", text)
+    # 키워드 필터
+    keyword_match = re.search(r"(골프|데이트|회식|미팅|회의|병원|약속|식사)", text)
     if keyword_match:
         keyword_filter = keyword_match.group(1)
 
-    if 'ud55cuac00' in text or 'ube44ub294 ub0a0' in text:
+    if '한가' in text or '비는 날' in text:
         find_available = True
 
-    if 'ud3c9uc77c' in text:
+    if '평일' in text:
         weekday_filter = 'weekday'
-    elif 'uc8fcub9d0' in text:
+    elif '주말' in text:
         weekday_filter = 'weekend'
 
     expressions = [text]
     for exp in expressions:
         exp = exp.strip()
-        print(f"[DEBUG] 번서 중 exp: {repr(exp)}")
+        print(f"[DEBUG] 분석 중 exp: {repr(exp)}")
 
-        if 'ub0b4uc77cuba54ub808' in exp or 'ub0b4ubaa8ub808' in exp:
-            print("[MATCH] 내uc77cuba54ub808")
+        if '내일모레' in exp or '낼모레' in exp:
+            print("[MATCH] 내일모레")
             dates.add((today + timedelta(days=2)).date())
             continue
-        if 'ub0b4uc77c' in exp:
-            print("[MATCH] 내uc77c")
+        if '내일' in exp and '모레' not in exp:
+            print("[MATCH] 내일")
             dates.add((today + timedelta(days=1)).date())
             continue
-        if 'ub0b4' in exp and 'ub0b4uc77c' not in exp and 'ubaa8ub808' not in exp:
-            print("[MATCH] 내")
+        if '낼' in exp and '모레' not in exp and '내일' not in exp:
+            print("[MATCH] 낼")
             dates.add((today + timedelta(days=1)).date())
             continue
-        if 'ubaa8ub808' in exp:
-            print("[MATCH] 모ub808")
+        if '모레' in exp:
+            print("[MATCH] 모레")
             dates.add((today + timedelta(days=2)).date())
             continue
         if '글피' in exp:
             print("[MATCH] 글피")
             dates.add((today + timedelta(days=3)).date())
             continue
-        if 'uc624ub298' in exp:
-            print("[MATCH] 오ub298")
+        if '오늘' in exp:
+            print("[MATCH] 오늘")
             dates.add(today.date())
             continue
 
         word_day_map = {
-            'ud558ub8e8': 1, 'uc774틀': 2, 'uc0acud74c': 3, 'ub098ud74c': 4, 'ub2e4uc0ac': 5, 'uc5bf사': 6, 'uc77cuc8fc일': 7
+            '하루': 1, '이틀': 2, '사흘': 3, '나흘': 4, '닷새': 5, '엿새': 6, '일주일': 7
         }
         for word, offset in word_day_map.items():
-            if f'{word} 드이' in exp or f'{word} 후' in exp:
+            if f'{word} 뒤' in exp or f'{word} 후' in exp:
                 print(f"[MATCH] 단어기반 +{offset}일")
                 dates.add((today + timedelta(days=offset)).date())
                 break
@@ -94,45 +94,45 @@ def extract_dates_from_text(text, today=None):
                 dates.add((today - timedelta(days=offset)).date())
                 break
 
-        if match := re.search(r'(\d+)[\uc77c\s]*(\ub4dc\uc774|\ud6c4)', exp):
+        if match := re.search(r'(\d+)[일\s]*(뒤|후)', exp):
             offset = int(match.group(1))
             print(f"[MATCH] 숫자기반 +{offset}일")
             dates.add((today + timedelta(days=offset)).date())
-        elif match := re.search(r'(\d+)[\uc77c\s]*(\uc804|\uc55e)', exp):
+        elif match := re.search(r'(\d+)[일\s]*(전|앞)', exp):
             offset = int(match.group(1))
             print(f"[MATCH] 숫자기반 -{offset}일")
             dates.add((today - timedelta(days=offset)).date())
 
-        elif match := re.search(r'(\d{1,2})\uc6d4', exp):
-            print(f"[MATCH] \uc6d4 \uc804체 \ucc98리")
+        elif match := re.search(r'(\d{1,2})월', exp):
+            print("[MATCH] 월 전체 처리")
             month = int(match.group(1))
             year = today.year if month >= today.month else today.year + 1
             start, end = get_month_range(year, month)
             for i in range((end - start).days + 1):
                 dates.add((start + timedelta(days=i)).date())
 
-        elif any(key in exp for key in ['ub2e4ub2e4ub2e4uc74c주', 'ub2e4ub2e4ub2bc주', '3주ub4dc', '3주 후']):
+        elif any(key in exp for key in ['다다다음주', '다다담주', '3주뒤', '3주 후']):
             print("[MATCH] 3주 후")
             base = today + timedelta(weeks=3)
             start, _ = get_week_range(base)
             for i in range(7):
                 dates.add((start + timedelta(days=i)).date())
 
-        elif any(key in exp for key in ['ub2e4ub2bc주', 'ub2e4ub2f0주', '2주ub4dc', '2주 후']):
+        elif any(key in exp for key in ['다다음주', '다담주', '2주뒤', '2주 후']):
             print("[MATCH] 2주 후")
             base = today + timedelta(weeks=2)
             start, _ = get_week_range(base)
             for i in range(7):
                 dates.add((start + timedelta(days=i)).date())
 
-        elif any(key in exp for key in ['ub2f4주', 'ub2bc주', '1주ub4dc', '1주 후']):
-            print("[MATCH] 담주")
+        elif any(key in exp for key in ['다음주', '담주', '1주뒤', '1주 후']):
+            print("[MATCH] 다음주")
             base = today + timedelta(weeks=1)
             start, _ = get_week_range(base)
             for i in range(7):
                 dates.add((start + timedelta(days=i)).date())
 
-        elif any(key in exp for key in ['uc774번주', '\uae08주']):
+        elif any(key in exp for key in ['이번주', '금주']):
             print("[MATCH] 이번주")
             start, _ = get_week_range(today)
             for i in range(7):
@@ -140,7 +140,7 @@ def extract_dates_from_text(text, today=None):
 
         elif match := re.findall(r'(\d{1,2})[./](\d{1,2})', exp):
             for m, d in match:
-                print(f"[MATCH] \ub0a0짜 \ud328턴 {m}/{d}")
+                print(f"[MATCH] 날짜 패턴 {m}/{d}")
                 month = int(m)
                 day = int(d)
                 year = today.year if month >= today.month else today.year + 1
@@ -150,12 +150,12 @@ def extract_dates_from_text(text, today=None):
                     continue
 
     if not dates:
-        print("[WARN] \ub0a0짜 \uc778식 \uc2e4패, \ubc18환할 \ub0a0짜 없음")
+        print("[WARN] 날짜 인식 실패, 반환할 날짜 없음")
 
     return {
         'dates': sorted(dates),
         'time_filter': time_filter,
         'keyword_filter': keyword_filter,
         'find_available': find_available,
-        'weekday_filter': weekday_filter  # ← 참고할 값
+        'weekday_filter': weekday_filter
     }
