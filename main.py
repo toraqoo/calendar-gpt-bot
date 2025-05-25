@@ -1,7 +1,7 @@
-# main.py
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 import requests
+import re
 from date_parser import extract_dates_from_text
 from gcal import get_events, filter_events, find_available_days, format_event_list, format_available_days
 
@@ -19,8 +19,13 @@ def root():
 
 @app.post("/calendar")
 def calendar_handler(request: RequestModel):
-    user_input = request.user_input
-    parsed = extract_dates_from_text(user_input)
+    # ✅ 입력 텍스트 정리
+    raw_input = request.user_input
+    clean_input = re.sub(r'[\u200b\u200c\u200d\ufeff]', '', raw_input).strip().lower()
+    print(f"[DEBUG] raw input = {repr(raw_input)}")
+    print(f"[DEBUG] cleaned input = {repr(clean_input)}")
+
+    parsed = extract_dates_from_text(clean_input)
     dates = parsed['dates']
     time_filter = parsed['time_filter']
     keyword_filter = parsed['keyword_filter']
