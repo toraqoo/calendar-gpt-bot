@@ -47,14 +47,14 @@ def extract_dates_from_text(text, today=None):
     for exp in expressions:
         exp = exp.strip()
 
-        # ✅ 상대 날짜 처리
+        # ✅ 상대 날짜 표현 (긴 표현 → 짧은 표현 순서)
         if '내일모레' in exp or '낼모레' in exp:
             dates.add((today + timedelta(days=2)).date())
             continue
         if '내일' in exp and '모레' not in exp:
             dates.add((today + timedelta(days=1)).date())
             continue
-        if '낼' in exp and '모레' not in exp:
+        if '낼' in exp and '모레' not in exp and '내일' not in exp:
             dates.add((today + timedelta(days=1)).date())
             continue
         if '모레' in exp:
@@ -67,7 +67,7 @@ def extract_dates_from_text(text, today=None):
             dates.add(today.date())
             continue
 
-        # 단어형 상대일
+        # 단어 기반 상대일
         word_day_map = {
             '하루': 1, '이틀': 2, '사흘': 3, '나흘': 4, '닷새': 5, '엿새': 6, '일주일': 7
         }
@@ -79,7 +79,7 @@ def extract_dates_from_text(text, today=None):
                 dates.add((today - timedelta(days=offset)).date())
                 break
 
-        # 숫자형 상대일
+        # 숫자 기반 상대일
         if match := re.search(r'(\d+)[일\s]*(뒤|후)', exp):
             offset = int(match.group(1))
             dates.add((today + timedelta(days=offset)).date())
