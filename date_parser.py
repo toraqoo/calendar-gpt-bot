@@ -40,25 +40,26 @@ def extract_dates_from_text(text, today=None):
     if '한가' in text or '비는 날' in text:
         find_available = True
 
-    expressions = re.split(r'[,+/]', text)
+    # ✅ 슬래시 split 안 하고 전체 문장 분석
+    expressions = [text]
     for exp in expressions:
         exp = exp.strip()
 
-        # 오늘/내일/모레/글피
+        # ✅ 오늘/내일/모레/글피/낼/낼모레
         if '오늘' in exp:
             dates.add(today.date())
             continue
-        if '내일' in exp:
+        if '내일' in exp or '낼' in exp:
             dates.add((today + timedelta(days=1)).date())
             continue
-        if '모레' in exp:
+        if '모레' in exp or '낼모레' in exp:
             dates.add((today + timedelta(days=2)).date())
             continue
         if '글피' in exp:
             dates.add((today + timedelta(days=3)).date())
             continue
 
-        # 단어 기반
+        # ✅ 단어 기반 상대일
         word_day_map = {
             '하루': 1,
             '이틀': 2,
@@ -76,7 +77,7 @@ def extract_dates_from_text(text, today=None):
                 dates.add((today - timedelta(days=offset)).date())
                 break
 
-        # 숫자 기반
+        # ✅ 숫자 기반 상대일
         if match := re.search(r'(\d+)[일\s]*(뒤|후)', exp):
             offset = int(match.group(1))
             dates.add((today + timedelta(days=offset)).date())
@@ -84,7 +85,7 @@ def extract_dates_from_text(text, today=None):
             offset = int(match.group(1))
             dates.add((today - timedelta(days=offset)).date())
 
-        # 월 전체
+        # ✅ 월 전체 (6월 등)
         elif match := re.search(r'(\d{1,2})월', exp):
             month = int(match.group(1))
             year = today.year if month >= today.month else today.year + 1
@@ -93,7 +94,7 @@ def extract_dates_from_text(text, today=None):
             for i in range(delta):
                 dates.add((start + timedelta(days=i)).date())
 
-        # 주 단위
+        # ✅ 주 단위
         elif any(key in exp for key in ['다다다음주', '다다담주', '3주뒤', '3주 후', '3주후', '3주 뒤']):
             base = today + timedelta(weeks=3)
             start, _ = get_week_range(base)
@@ -114,7 +115,7 @@ def extract_dates_from_text(text, today=None):
             for i in range(7):
                 dates.add((start + timedelta(days=i)).date())
 
-        # 5/26, 6.11 등
+        # ✅ 5/26, 6.11 등
         elif match := re.findall(r'(\d{1,2})[./](\d{1,2})', exp):
             for m, d in match:
                 month = int(m)
@@ -125,7 +126,7 @@ def extract_dates_from_text(text, today=None):
                 except ValueError:
                     continue
 
-    # 평일/주말/요일
+    # 평일/주말/요일 필터
     if '평일' in text:
         dates = {d for d in dates if datetime.combine(d, datetime.min.time()).weekday() < 5}
     elif '주말' in text:
