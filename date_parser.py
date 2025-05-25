@@ -19,7 +19,10 @@ def extract_dates_from_text(text, today=None):
     if today is None:
         today = datetime.now() + KST
 
-    text = text.lower()
+    # ✅ 텍스트 정제
+    text = text.lower().strip()
+    text = re.sub(r'[\u200b\u200c\u200d\ufeff]', '', text)
+
     dates = set()
     time_filter = None
     keyword_filter = None
@@ -40,19 +43,18 @@ def extract_dates_from_text(text, today=None):
     if '한가' in text or '비는 날' in text:
         find_available = True
 
-    # ✅ split 제거 — 전체 문장 그대로 분석
     expressions = [text]
     for exp in expressions:
         exp = exp.strip()
 
-        # ✅ 상대 날짜 표현: 긴 표현 → 짧은 표현 순으로 분기
+        # ✅ 상대 날짜 처리
         if '내일모레' in exp or '낼모레' in exp:
             dates.add((today + timedelta(days=2)).date())
             continue
-        if '낼' in exp and '모레' not in exp:
+        if '내일' in exp and '모레' not in exp:
             dates.add((today + timedelta(days=1)).date())
             continue
-        if '내일' in exp:
+        if '낼' in exp and '모레' not in exp:
             dates.add((today + timedelta(days=1)).date())
             continue
         if '모레' in exp:
@@ -65,15 +67,9 @@ def extract_dates_from_text(text, today=None):
             dates.add(today.date())
             continue
 
-        # ✅ 단어 기반 상대일
+        # 단어형 상대일
         word_day_map = {
-            '하루': 1,
-            '이틀': 2,
-            '사흘': 3,
-            '나흘': 4,
-            '닷새': 5,
-            '엿새': 6,
-            '일주일': 7,
+            '하루': 1, '이틀': 2, '사흘': 3, '나흘': 4, '닷새': 5, '엿새': 6, '일주일': 7
         }
         for word, offset in word_day_map.items():
             if f'{word} 뒤' in exp or f'{word} 후' in exp:
@@ -83,7 +79,7 @@ def extract_dates_from_text(text, today=None):
                 dates.add((today - timedelta(days=offset)).date())
                 break
 
-        # ✅ 숫자 기반 상대일
+        # 숫자형 상대일
         if match := re.search(r'(\d+)[일\s]*(뒤|후)', exp):
             offset = int(match.group(1))
             dates.add((today + timedelta(days=offset)).date())
@@ -91,27 +87,26 @@ def extract_dates_from_text(text, today=None):
             offset = int(match.group(1))
             dates.add((today - timedelta(days=offset)).date())
 
-        # ✅ 월 전체 (6월 등)
+        # 월 전체
         elif match := re.search(r'(\d{1,2})월', exp):
             month = int(match.group(1))
             year = today.year if month >= today.month else today.year + 1
             start, end = get_month_range(year, month)
-            delta = (end - start).days + 1
-            for i in range(delta):
+            for i in range((end - start).days + 1):
                 dates.add((start + timedelta(days=i)).date())
 
-        # ✅ 주 단위
-        elif any(key in exp for key in ['다다다음주', '다다담주', '3주뒤', '3주 후', '3주후', '3주 뒤']):
+        # 주 단위
+        elif any(key in exp for key in ['다다다음주', '다다담주', '3주뒤', '3주 후']):
             base = today + timedelta(weeks=3)
             start, _ = get_week_range(base)
             for i in range(7):
                 dates.add((start + timedelta(days=i)).date())
-        elif any(key in exp for key in ['다다음주', '다담주', '2주뒤', '2주 후', '2주후', '2주 뒤']):
+        elif any(key in exp for key in ['다다음주', '다담주', '2주뒤', '2주 후']):
             base = today + timedelta(weeks=2)
             start, _ = get_week_range(base)
             for i in range(7):
                 dates.add((start + timedelta(days=i)).date())
-        elif any(key in exp for key in ['다음주', '담주', '1주뒤', '1주 후', '1주후', '1주 뒤']):
+        elif any(key in exp for key in ['다음주', '담주', '1주뒤', '1주 후']):
             base = today + timedelta(weeks=1)
             start, _ = get_week_range(base)
             for i in range(7):
@@ -121,7 +116,7 @@ def extract_dates_from_text(text, today=None):
             for i in range(7):
                 dates.add((start + timedelta(days=i)).date())
 
-        # ✅ 5/26, 6.11 등
+        # 5/26, 6.11 등
         elif match := re.findall(r'(\d{1,2})[./](\d{1,2})', exp):
             for m, d in match:
                 month = int(m)
@@ -132,7 +127,7 @@ def extract_dates_from_text(text, today=None):
                 except ValueError:
                     continue
 
-    # ✅ 평일/주말/요일 필터
+    # 평일/주말/요일 필터
     if '평일' in text:
         dates = {d for d in dates if datetime.combine(d, datetime.min.time()).weekday() < 5}
     elif '주말' in text:
@@ -147,20 +142,3 @@ def extract_dates_from_text(text, today=None):
         'keyword_filter': keyword_filter,
         'find_available': find_available,
     }
-
-
-for exp in expressions:
-    print("[TEST] 현재 표현식 exp:", repr(exp))
-
-    if '내일모레' in exp or '낼모레' in exp:
-        print(">>> 내일모레 처리됨")
-        dates.add((today + timedelta(days=2)).date())
-        continue
-    if '낼' in exp and '모레' not in exp:
-        print(">>> 낼 처리됨")
-        dates.add((today + timedelta(days=1)).date())
-        continue
-    if '내일' in exp:
-        print(">>> 내일 처리됨")  # ✅ 이게 찍혀야 정상
-        dates.add((today + timedelta(days=1)).date())
-        continue
