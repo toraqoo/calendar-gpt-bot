@@ -2,7 +2,7 @@ import os
 import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, date
 from collections import defaultdict
 
 # 구글 인증 설정
@@ -11,10 +11,24 @@ credentials = service_account.Credentials.from_service_account_info(credentials_
 service = build('calendar', 'v3', credentials=credentials)
 CALENDAR_ID = 'mk@bonanza-factory.co.kr'
 
+# ✅ date → datetime 변환 함수
+def normalize_dates(dates):
+    result = []
+    for d in dates:
+        if isinstance(d, datetime):
+            result.append(d)
+        elif isinstance(d, date):  # datetime.date (but not datetime)
+            result.append(datetime.combine(d, time.min))  # 00:00
+    return result
+
 # 일정 가져오기
 def get_events(dates):
-    start_date = min(dates).replace(hour=0, minute=0, second=0).isoformat() + 'Z'
-    end_date = (max(dates) + timedelta(days=1)).replace(hour=0, minute=0, second=0).isoformat() + 'Z'
+    date_times = normalize_dates(dates)
+    if not date_times:
+        return []
+
+    start_date = min(date_times).replace(hour=0, minute=0, second=0).isoformat() + 'Z'
+    end_date = (max(date_times) + timedelta(days=1)).replace(hour=0, minute=0, second=0).isoformat() + 'Z'
 
     events_result = service.events().list(
         calendarId=CALENDAR_ID,
@@ -58,7 +72,7 @@ def find_available_days(events, target_dates, time_filter=None):
     busy_days = set()
     for e in filter_events(events, time_filter=time_filter):
         busy_days.add(e['start'].date())
-    available = [d for d in target_dates if d.date() not in busy_days]
+    available = [d for d in target_dates if isinstance(d, datetime) and d.date() not in busy_days or isinstance(d, date) and d not in busy_days]
     return available
 
 # 주차 라벨 포맷
@@ -86,9 +100,9 @@ def attach_emoji_to_event(summary: str) -> str:
 def format_event_list(events):
     grouped_by_week = defaultdict(lambda: defaultdict(list))
     for e in sorted(events, key=lambda x: x['start']):
-        date = e['start'].date()
-        week_start = date - timedelta(days=date.weekday())
-        grouped_by_week[week_start][date].append(e)
+        date_key = e['start'].date()
+        week_start = date_key - timedelta(days=date_key.weekday())
+        grouped_by_week[week_start][date_key].append(e)
 
     lines = []
     for week_start in sorted(grouped_by_week):
