@@ -147,3 +147,20 @@ def extract_dates_from_text(text, today=None):
         'keyword_filter': keyword_filter,
         'find_available': find_available,
     }
+
+
+for exp in expressions:
+    print("[TEST] 현재 표현식 exp:", repr(exp))
+
+    if '내일모레' in exp or '낼모레' in exp:
+        print(">>> 내일모레 처리됨")
+        dates.add((today + timedelta(days=2)).date())
+        continue
+    if '낼' in exp and '모레' not in exp:
+        print(">>> 낼 처리됨")
+        dates.add((today + timedelta(days=1)).date())
+        continue
+    if '내일' in exp:
+        print(">>> 내일 처리됨")  # ✅ 이게 찍혀야 정상
+        dates.add((today + timedelta(days=1)).date())
+        continue
