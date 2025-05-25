@@ -7,7 +7,7 @@ from gcal import get_events, filter_events, find_available_days, format_event_li
 
 app = FastAPI()
 
-# ✅ Mk님의 실제 텔레그램 봇 토큰
+# ✅ Mk님의 실제 텔레그램 번 토큰
 BOT_TOKEN = "7447570847:AAFtmC8xPmvK-m0mT-oVh5IDrjY_X5Ve718"
 
 class RequestModel(BaseModel):
@@ -30,6 +30,7 @@ def calendar_handler(request: RequestModel):
     time_filter = parsed['time_filter']
     keyword_filter = parsed['keyword_filter']
     find_available = parsed['find_available']
+    weekday_filter = parsed.get('weekday_filter')  # ✅ 추가
 
     if not dates:
         return "❗ 날짜를 인식하지 못했어요. 예: '5/26', '다음주 월', '6월 전체'"
@@ -37,10 +38,14 @@ def calendar_handler(request: RequestModel):
     events = get_events(dates)
 
     if find_available:
-        available_days = find_available_days(events, dates, time_filter=time_filter)
+        available_days = find_available_days(
+            events, dates,
+            time_filter=time_filter,
+            weekday_filter=weekday_filter  # ✅ 전달
+        )
         if not available_days:
             return "❌ 요청한 조건에 맞는 '한가한 날'이 없습니다."
-        return format_available_days(available_days)
+        return format_available_days(available_days, time_filter=time_filter)
 
     filtered_events = filter_events(events, time_filter=time_filter, keyword_filter=keyword_filter)
     if not filtered_events:
