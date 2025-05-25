@@ -5,7 +5,7 @@ from googleapiclient.discovery import build
 from datetime import datetime, timedelta, time, date
 from collections import defaultdict
 
-# 구글 인증 설정
+# 구그 인증 설정
 credentials_info = json.loads(os.environ['GOOGLE_CREDENTIALS_JSON'])
 credentials = service_account.Credentials.from_service_account_info(credentials_info)
 service = build('calendar', 'v3', credentials=credentials)
@@ -17,8 +17,8 @@ def normalize_dates(dates):
     for d in dates:
         if isinstance(d, datetime):
             result.append(d)
-        elif isinstance(d, date):  # datetime.date (but not datetime)
-            result.append(datetime.combine(d, time.min))  # 00:00
+        elif isinstance(d, date):
+            result.append(datetime.combine(d, time.min))
     return result
 
 # 일정 가져오기
@@ -67,12 +67,22 @@ def filter_events(events, time_filter=None, keyword_filter=None):
         result.append(e)
     return result
 
-# 한가한 날 찾기
-def find_available_days(events, target_dates, time_filter=None):
+# 한가한 날 찾기 (평일/주말 필터 반영)
+def find_available_days(events, target_dates, time_filter=None, weekday_filter=None):
     busy_days = set()
     for e in filter_events(events, time_filter=time_filter):
         busy_days.add(e['start'].date())
-    available = [d for d in target_dates if isinstance(d, datetime) and d.date() not in busy_days or isinstance(d, date) and d not in busy_days]
+
+    # ✅ 평일/주말 필터
+    if weekday_filter == 'weekday':
+        target_dates = [d for d in target_dates if d.weekday() < 5]
+    elif weekday_filter == 'weekend':
+        target_dates = [d for d in target_dates if d.weekday() >= 5]
+
+    available = [
+        d for d in target_dates
+        if (d.date() if isinstance(d, datetime) else d) not in busy_days
+    ]
     return available
 
 # 주차 라벨 포맷
